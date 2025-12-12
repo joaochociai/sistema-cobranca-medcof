@@ -2444,13 +2444,13 @@ body.is-admin div.admin-only {
 
 /* --- DESTAQUE DO DIA ATUAL (COLUNA) --- */
 .today-column-header {
-    background-color: #fffb03 !important; /* Fundo Amarelo Claro no Cabeçalho */
+    background-color: #fffb00 !important; /* Fundo Amarelo Claro no Cabeçalho */
     color: #000000 !important;
     border-bottom: 2px solid #ffeeba !important;
 }
 
 .today-column-cell {
-    background-color: #ff00ff28 !important; /* Fundo Amarelo Muito Claro nas Células */
+    background-color: #fffb033d !important; /* Fundo Amarelo Muito Claro nas Células */
 }
 
 /* Garante que o input dentro da célula fique transparente para mostrar a cor de fundo */
