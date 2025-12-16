@@ -195,16 +195,32 @@ export async function processImportRaw(rawData) {
 
 window.processImport = async function () {
   const raw = document.getElementById('import-data')?.value || '';
-  if (!raw) return alert('Cole os dados primeiro.');
+  if (!raw) return Swal.fire('Ops!', 'Cole os dados primeiro.', 'warning');
+  
+  // Fecha o modal de input para focar no loading
+  window.closeImportModal();
+
+  // Loading
+  Swal.fire({
+      title: 'Importando...',
+      html: 'Processando linhas do Excel.',
+      didOpen: () => Swal.showLoading()
+  });
   
   try {
     const count = await processImportRaw(raw);
-    window.closeImportModal();
-    alert(`${count} alunos importados!`);
+    
+    // Sucesso com detalhes
+    Swal.fire({
+        title: 'Importação Concluída!',
+        text: `${count} novos alunos foram adicionados.`,
+        icon: 'success'
+    });
+    
     loadCobrancaData();
   } catch (err) {
-    console.error('Erro import:', err);
-    alert('Erro ao importar.');
+    console.error(err);
+    Swal.fire('Erro na Importação', 'Verifique o formato das colunas.', 'error');
   }
 };
 
@@ -422,37 +438,96 @@ window.saveExtraStatus = async function () {
           modalHeader.classList.add(`header-status-${safe}`);
       }
     }
+
+    window.showToast("Status atualizado!");
+
   } catch (error) { console.error(error); }
 };
 
 window.registerPayment = async function() {
   if (!currentActionStudentId) return;
+  
   const dateVal = document.getElementById('payment-date')?.value;
   const originVal = document.getElementById('payment-origin')?.value;
   const userEmail = getCurrentUserEmail();
 
-  if (!dateVal || !originVal) return alert("Preencha data e origem.");
-  if (!confirm("Confirmar pagamento e remover da lista?")) return;
+  // 1. Validação Visual (SweetAlert)
+  if (!dateVal || !originVal) {
+      return Swal.fire('Campos Obrigatórios', 'Preencha a data e a origem do pagamento.', 'warning');
+  }
+
+  // 2. Confirmação Bonita
+  const result = await Swal.fire({
+      title: 'Confirmar Baixa?',
+      text: "O status mudará para 'Pago' e o aluno sairá desta lista.",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#28a745', // Verde
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Sim, confirmar!',
+      cancelButtonText: 'Cancelar'
+  });
+
+  if (!result.isConfirmed) return;
 
   try {
+    // 3. Loading
+    Swal.fire({ title: 'Processando...', didOpen: () => Swal.showLoading() });
+
     await updateDoc(doc(db, COBRANCA_COLLECTION, currentActionStudentId), {
       Status: 'Pago',
       DataPagamento: new Date(dateVal),
       OrigemPagamento: originVal,
       BaixadoPor: userEmail
     });
-    alert("Pagamento registrado!");
+    
+    // Fecha o modal de detalhes para limpar a tela
     closeActionsModal();
+
+    // 4. Sucesso
+    Swal.fire('Baixa Realizada!', 'O pagamento foi registrado com sucesso.', 'success');
+    
     loadCobrancaData();
-  } catch (error) { alert("Erro: " + error.message); }
+  } catch (error) { 
+      console.error(error);
+      Swal.fire('Erro', 'Não foi possível registrar o pagamento.', 'error');
+  }
 };
 
 window.archiveStudent = async function(docId) {
-  if (!confirm("Remover aluno permanentemente?")) return;
+  // 1. Substituindo o confirm nativo pelo SweetAlert2
+  const result = await Swal.fire({
+      title: 'Tem certeza?',
+      text: "Você não poderá reverter isso!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc3545', // Vermelho (perigo)
+      cancelButtonColor: '#6c757d',  // Cinza
+      confirmButtonText: 'Sim, excluir!',
+      cancelButtonText: 'Cancelar'
+  });
+
+  // 2. Se o usuário NÃO confirmou, paramos aqui.
+  if (!result.isConfirmed) return;
+
   try {
+    // Exibe loading enquanto deleta
+    Swal.fire({ title: 'Excluindo...', didOpen: () => Swal.showLoading() });
+    
     await deleteDoc(doc(db, COBRANCA_COLLECTION, docId));
+    
+    // Sucesso!
+    Swal.fire(
+      'Excluído!',
+      'O registro foi removido.',
+      'success'
+    );
+    
     loadCobrancaData();
-  } catch (error) { alert("Erro ao excluir: " + error.message); }
+  } catch (error) { 
+      // Erro
+      Swal.fire('Erro!', error.message, 'error');
+  }
 };
 
 // -------------------------

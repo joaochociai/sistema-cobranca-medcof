@@ -103,3 +103,27 @@ export function closeModal() {
 
     overlay.style.display = 'none';
 }
+
+const Toast = typeof Swal !== 'undefined' ? Swal.mixin({
+    toast: true,
+    position: 'top-end', // Canto superior direito
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+    didOpen: (toast) => {
+        toast.addEventListener('mouseenter', Swal.stopTimer)
+        toast.addEventListener('mouseleave', Swal.resumeTimer)
+    }
+}) : null;
+
+// Expõe globalmente para facilitar o uso
+window.showToast = function(title, icon = 'success') {
+    if (Toast) {
+        Toast.fire({
+            icon: icon,
+            title: title
+        });
+    } else {
+        console.warn("SweetAlert2 não carregado. Toast:", title);
+    }
+};

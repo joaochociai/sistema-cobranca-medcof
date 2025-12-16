@@ -348,29 +348,50 @@ function generateWeekendHTML(dates) {
     return html;
 }
 
-// ... Resto das funções (saveEscalaCell, allowDrop, renderEscalaView etc) MANTIDAS IGUAIS ...
-// (Só copiei a estrutura para garantir, mas a lógica abaixo não mudou, apenas as duas funções generate acima)
-
 window.saveEscalaCell = async function(rowKey, day, month, year, value) {
     const docId = `${year}-${String(month).padStart(2, '0')}`;
+    
+    // 1. Atualização Otimista (Cache Local)
     if (!monthsCache[docId]) monthsCache[docId] = { grid: {} };
     if (!monthsCache[docId].grid) monthsCache[docId].grid = {};
     if (!monthsCache[docId].grid[rowKey]) monthsCache[docId].grid[rowKey] = {};
     monthsCache[docId].grid[rowKey][day] = value;
 
-    showMessage("Salvando...", "#007bff");
-
     try {
         const docRef = doc(db, ESCALA_COLLECTION, docId);
-        await setDoc(docRef, {
-            [`grid.${rowKey}.${day}`]: value,
-            lastUpdate: serverTimestamp(),
-            updatedBy: auth.currentUser?.email
-        }, { merge: true });
-        showMessage("Salvo!", "green");
+        
+        // 2. Tentativa Principal: Update (Correto para campos aninhados "grid.cargo.dia")
+        try {
+            await updateDoc(docRef, {
+                [`grid.${rowKey}.${day}`]: value,
+                lastUpdate: serverTimestamp(),
+                updatedBy: auth.currentUser?.email || "Sistema"
+            });
+        } catch (error) {
+            // 3. Fallback: Se o documento não existir (Erro not-found), cria ele do zero
+            if (error.code === 'not-found') {
+                const newData = { 
+                    grid: { 
+                        [rowKey]: { 
+                            [day]: value 
+                        } 
+                    },
+                    createdAt: serverTimestamp(),
+                    lastUpdate: serverTimestamp(),
+                    updatedBy: auth.currentUser?.email || "Sistema"
+                };
+                await setDoc(docRef, newData, { merge: true });
+            } else {
+                throw error; // Se for outro erro, repassa para o catch abaixo
+            }
+        }
+        
+        // Feedback visual (Toast)
+        if(window.showToast) window.showToast("Escala salva!");
+
     } catch (err) { 
-        console.error("Erro save:", err); 
-        showMessage("Erro ao salvar!", "red");
+        console.error("Erro ao salvar célula:", err); 
+        if(window.showToast) window.showToast("Erro ao salvar!", "error");
     }
 }
 
@@ -472,7 +493,19 @@ window.closeEscalaEditor = function () {
 };
 
 window.fillStandardSchedule = async function() {
-    if (!confirm("Preencher padrão (Seg-Sex)?")) return;
+    // Confirmação segura
+    const result = await Swal.fire({
+        title: 'Preencher Padrão?',
+        html: "Isso vai <b>sobrescrever</b> os horários de Segunda a Sexta deste mês com a equipe padrão.<br>Deseja continuar?",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ffc107', // Amarelo (Atenção)
+        cancelButtonColor: '#333',
+        confirmButtonText: 'Sim, preencher!',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
     const docId = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
     if (!monthsCache[docId]) monthsCache[docId] = { grid: {} };
     

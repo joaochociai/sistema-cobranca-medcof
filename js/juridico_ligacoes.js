@@ -328,36 +328,79 @@ window.saveExtraStatusJuridico = saveExtraStatusJuridico;
 
 export async function registerPaymentJuridico() {
   if (!currentJuridicoActionId) return;
+  
   const dateVal = document.getElementById('juridico-payment-date')?.value;
   const origin = document.getElementById('juridico-payment-origin')?.value;
-  if (!dateVal || !origin) return alert('Preencha data e origem.');
 
-  if (!confirm('Confirmar pagamento?')) return;
+  // Validação mais suave
+  if (!dateVal || !origin) {
+      return Swal.fire('Atenção', 'Preencha a data e a origem do pagamento.', 'info');
+  }
+
+  // Confirmação
+  const result = await Swal.fire({
+      title: 'Confirmar Pagamento?',
+      text: "O registro será baixado como 'Pago'.",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#28a745', // Verde
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Sim, confirmar!'
+  });
+
+  if (!result.isConfirmed) return;
+
   try {
+    Swal.fire({ title: 'Registrando...', didOpen: () => Swal.showLoading() });
+
     await updateDoc(doc(db, JURIDICO_COLLECTION, currentJuridicoActionId), {
       Status: 'Pago',
       DataPagamento: new Date(dateVal),
       OrigemPagamento: origin,
-      BaixadoPor: getCurrentEmail()
+      BaixadoPor: getCurrentEmail() // Usa a função auxiliar interna do arquivo
     });
-    alert('Pagamento registrado.');
+
+    // Fecha o modal antes de mostrar o sucesso para ficar mais limpo
     closeActionsModalJuridico();
+    
+    Swal.fire('Sucesso!', 'Pagamento jurídico registrado.', 'success');
+    
     loadJuridicoLigacoes();
   } catch (err) {
     console.error(err);
-    alert('Erro ao registrar pagamento.');
+    Swal.fire('Erro!', 'Falha ao registrar pagamento.', 'error');
   }
 }
 window.registerPaymentJuridico = registerPaymentJuridico;
 
 export async function archiveJuridico(id) {
-  if (!confirm('Remover registro permanentemente?')) return;
+  // 1. Confirmação com SweetAlert2
+  const result = await Swal.fire({
+      title: 'Excluir registro?',
+      text: "Essa ação no jurídico é permanente!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc3545', // Vermelho
+      cancelButtonColor: '#6c757d',
+      confirmButtonText: 'Sim, excluir!',
+      cancelButtonText: 'Cancelar'
+  });
+
+  if (!result.isConfirmed) return;
+
   try {
+    // Loading enquanto processa
+    Swal.fire({ title: 'Excluindo...', didOpen: () => Swal.showLoading() });
+
     await deleteDoc(doc(db, JURIDICO_COLLECTION, id));
+    
+    // Sucesso
+    Swal.fire('Excluído!', 'Registro jurídico removido.', 'success');
+    
     loadJuridicoLigacoes();
   } catch (err) {
     console.error(err);
-    alert('Erro ao excluir.');
+    Swal.fire('Erro!', 'Não foi possível excluir.', 'error');
   }
 }
 window.archiveJuridico = archiveJuridico;

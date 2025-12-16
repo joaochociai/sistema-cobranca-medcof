@@ -131,99 +131,96 @@ export function renderCalendar(agendamentos = window.allAppointments) {
 
 // Função que exibe os detalhes (chamada pelo clique no nome)
 window.showDetailsGeneric = function(id, type) {
-    // 1. Tenta encontrar o agendamento na lista geral (Agenda/Cobrança)
-    // O uso de '?.' evita erro se a lista ainda não existir
+    // 1. Busca dados
     let data = window.allAppointments?.find(a => a.id === id);
-
-    // 2. Se não achou e for do tipo jurídico, procura na lista jurídica
     if (!data && type === 'juridico' && window.juridicoAppointments) {
         data = window.juridicoAppointments.find(a => a.id === id);
     }
+    // Fallback: Busca no histórico de cobrança se não achar
+    if (!data && window.cobrancaList) data = window.cobrancaList.find(a => a.id === id);
 
-    if (!data) {
-        // Tenta uma última busca na lista de cobrança ativa, caso venha de lá
-        if (window.cobrancaList) {
-            data = window.cobrancaList.find(a => a.id === id);
-        }
-        
-        if (!data) return alert("Dados do agendamento não encontrados na memória. Tente recarregar a página.");
-    }
+    if (!data) return Swal.fire('Ops', 'Agendamento não encontrado.', 'warning');
 
-    // Salva o registro atual para o botão de copiar usar depois
     window.lastOpenedAppointment = data;
 
-    // --- FORMATAÇÃO DOS DADOS ---
-    
-    // Valor Monetário
-    const valor = data.ValorParcela 
-        ? parseFloat(data.ValorParcela).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) 
-        : 'R$ 0,00';
-
-    // Função interna segura para formatar data (aceita Timestamp ou String)
+    // Helper de formatação
     const safeDate = (val) => {
         if (!val) return '-';
-        // Se for Timestamp do Firebase
-        if (val.seconds) return new Date(val.seconds * 1000).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-        // Se for String ou Date
+        if (val.seconds) return new Date(val.seconds * 1000).toLocaleDateString('pt-BR');
         const d = new Date(val);
-        return isNaN(d) ? val : d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+        return isNaN(d) ? val : d.toLocaleDateString('pt-BR');
     };
 
-    const vencimento = safeDate(data.DataVencimento);
-    const geracao = safeDate(data.DataGerarLink || data.DataAcao); // DataAcao para jurídico
+    const valor = data.ValorParcela ? parseFloat(data.ValorParcela).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
 
-    // --- MONTAGEM DO HTML ---
-    
     let content = '';
-    let headerColor = '#007bff'; // Azul padrão
+    let headerColor = '#007bff'; 
     let titleText = 'Detalhes do Agendamento';
+    let extraButtons = ''; 
 
     if (type === 'juridico') {
         headerColor = '#6A1B9A';
-        titleText = 'Detalhes do Agendamento';
+        titleText = '⚖️ Processo Jurídico';
+        
+        const dataAcao = safeDate(data.DataAcao);
+        
+        // Ícone de Status
+        let statusHtml = "⏳ PENDENTE";
+        if (data.concluido) statusHtml = "✅ CONCLUÍDO";
+
         content = `
             <table class="details-table">
                 <tr><th>Nome</th><td>${data.Nome}</td></tr>
                 <tr><th>E-mail</th><td>${data.Email || '-'}</td></tr>
-                <tr><th>Ação</th><td><strong>${data.Acao}</strong></td></tr>
-                <tr><th>Data Ação</th><td>${geracao}</td></tr>
+                
+                <tr><th>Ação</th><td style="color: #007bff; font-weight: bold;">${data.Acao || data["Ação"] || 'Verificar'}</td></tr>
+                
+                <tr><th>Data Ação</th><td>${dataAcao}</td></tr>
+                <tr><th>Status</th><td>${statusHtml}</td></tr>
                 <tr><th>Observação</th><td style="white-space: pre-wrap;">${data.Observacao || '-'}</td></tr>
-                <tr><th>Criado por</th><td><small>${data.createdBy || 'Sistema'}</small></td></tr>
             </table>`;
+            
+        // Botão Roxo de Editar (Igual ao seu print)
+        extraButtons = `
+            <button onclick="window.editJuridico('${data.id}')" 
+                style="margin-top:20px; width:100%; background:#6A1B9A; color:white; border:none; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:14px; transition: background 0.2s;">
+                ✏️ Editar Processo
+            </button>
+        `;
+
     } else {
-        // Layout Padrão (Cobrança/Agenda)
+        // Layout Padrão (Cobrança)
         content = `
             <table class="details-table">
                 <tr><th>Aluno</th><td>${data.Nome}</td></tr>
-                <tr><th>E-mail</th><td>${data.Email || '-'}</td></tr>
                 <tr><th>Curso</th><td>${data.Curso || '-'}</td></tr>
                 <tr><th>Telefone</th><td>${data.Telefone || '-'}</td></tr>
                 <tr><th>Motivo</th><td>${data.Motivo || '-'}</td></tr>
-                <tr><th>Valor</th><td>${valor} (${data.QtdParcelas || '1'}x)</td></tr>
-                <tr><th>Vencimento</th><td>${vencimento}</td></tr>
-                <tr><th>Gerar Link</th><td><strong>${geracao}</strong></td></tr>
+                <tr><th>Valor</th><td>${valor}</td></tr>
+                <tr><th>Vencimento</th><td>${safeDate(data.DataVencimento)}</td></tr>
+                <tr><th>Gerar Link</th><td><strong>${safeDate(data.DataGerarLink)}</strong></td></tr>
                 <tr><th>Observação</th><td style="white-space: pre-wrap;">${data.Observacao || '-'}</td></tr>
-                <tr><th>Criado por</th><td><small>${data.createdBy || 'Sistema'}</small></td></tr>
             </table>`;
     }
 
-    // Injeta o conteúdo na div do modal
-    document.getElementById('details-modal-content').innerHTML = `<div class="details-content-wrapper">${content}</div>`;
+    // Injeta conteúdo
+    document.getElementById('details-modal-content').innerHTML = `
+        <div class="details-content-wrapper">
+            ${content}
+            ${extraButtons}
+        </div>`;
     
-    // Ajusta o Cabeçalho (Título e Cor)
-    const modalBox = document.getElementById('details-modal-box');
-    const headerTitle = modalBox.querySelector('h2');
+    // Título e Cor
+    const headerTitle = document.getElementById('details-modal-title');
     if (headerTitle) {
-        headerTitle.innerText = titleText;
+        headerTitle.innerHTML = titleText;
         headerTitle.style.color = headerColor;
-        // Se o header tiver borda, pinta também
-        const headerContainer = document.getElementById('details-modal-header');
-        if(headerContainer) headerContainer.style.borderBottomColor = headerColor;
     }
 
-    // Exibe o modal
-    document.getElementById('details-modal-overlay').classList.remove('modal-hidden');
-    document.getElementById('details-modal-overlay').style.display = 'flex';
+    // Exibe
+    const overlay = document.getElementById('details-modal-overlay');
+    overlay.classList.remove('modal-hidden');
+    overlay.style.display = 'flex';
 };
 
 // Função de Copiar (Formatada)
@@ -350,8 +347,8 @@ export function changeMonth(delta) {
 }
 
 // --- ENVIO DO FORMULÁRIO ---
+// --- ENVIO DO FORMULÁRIO (COM SWEETALERT2) ---
 export async function submitAgendamento(formEl) {
-    const message = document.getElementById('form-message');
     const formData = new FormData(formEl);
     const obj = {};
     
@@ -364,30 +361,44 @@ export async function submitAgendamento(formEl) {
     const dVenc = parseDateBR(obj.DataVencimento);
     const dGerar = parseDateBR(obj.DataGerarLink);
     
+    // Validação com SweetAlert
     if(!dVenc || !dGerar) {
-        message.textContent = "Datas inválidas.";
-        message.style.color = "red";
-        return;
+        return Swal.fire('Datas Inválidas', 'Verifique os campos de data.', 'warning');
     }
     
     obj.DataVencimento = dVenc;
     obj.DataGerarLink = dGerar;
     obj.createdAt = new Date(); 
-    obj.createdBy = window.currentUserRole || 'Sistema'; // Ou pegar do auth.currentUser.email se disponível no escopo
+    obj.createdBy = window.currentUserRole || 'Sistema'; 
 
-    message.textContent = "Salvando...";
-    message.style.color = "#007bff";
+    // Loading...
+    Swal.fire({
+        title: 'Agendando...',
+        didOpen: () => Swal.showLoading()
+    });
 
     try { 
         await addDoc(collection(db,'agendamentos'), obj); 
+        
+        // Sucesso!
+        await Swal.fire({
+            title: 'Sucesso!',
+            text: 'Link agendado corretamente.',
+            icon: 'success',
+            timer: 1500,
+            showConfirmButton: false
+        });
+
         formEl.reset(); 
-        message.textContent = 'Salvo com sucesso!';
-        message.style.color = "green";
         loadCalendarData(); 
+        
+        // Opcional: Limpar msg antiga se existir
+        const oldMsg = document.getElementById('form-message');
+        if(oldMsg) oldMsg.textContent = '';
+
     } catch(e){ 
         console.error(e); 
-        message.textContent = 'Erro ao salvar.';
-        message.style.color = "red";
+        Swal.fire('Erro', 'Falha ao salvar no banco de dados.', 'error');
     }
 }
 

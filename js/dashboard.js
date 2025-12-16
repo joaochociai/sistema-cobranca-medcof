@@ -1,29 +1,33 @@
 import { db } from './firebase.js';
-import { collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, query, onSnapshot, writeBatch, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { parseDateBR } from './utils.js';
 
 let unsubscribeCobranca, unsubscribeJuridico, unsubscribeMetricas;
 let chartStatus, chartMeta, chartPayment, chartMoM, chartEvolution, chart3CobEvo, chart3CobPie;
 let rawRealTimeCobranca = [], rawRealTimeJuridico = [], rawHistoricalData = [];
 
+// --- INICIALIZAÇÃO ---
 export function initDashboard() {
-    console.log("--> Iniciando Dashboard v2.1...");
+    console.log("--> Iniciando Dashboard v2.3 (Funções Globais)...");
     startListeners();
 }
 
 function startListeners() {
+    // 1. Cobrança RealTime
     const qCob = query(collection(db, 'controle_3_cobranca'));
     unsubscribeCobranca = onSnapshot(qCob, (snap) => {
         rawRealTimeCobranca = snap.docs.map(d => d.data());
         processAllData();
     });
 
+    // 2. Jurídico RealTime
     const qJur = query(collection(db, 'juridico_ligacoes'));
     unsubscribeJuridico = onSnapshot(qJur, (snap) => {
         rawRealTimeJuridico = snap.docs.map(d => d.data());
         processAllData();
     });
 
+    // 3. Histórico (Metricas)
     const qMetricas = query(collection(db, 'metricas_diarias'));
     unsubscribeMetricas = onSnapshot(qMetricas, (snap) => {
         rawHistoricalData = [];
@@ -44,44 +48,19 @@ function startListeners() {
 }
 
 function processAllData() {
-    renderEvolutionChart(rawHistoricalData);
-    applyDashboardFilters();
-}
-
-// 1. GRÁFICO EVOLUÇÃO (HISTÓRICO)
-function renderEvolutionChart(fullData) {
-    const map = {};
-    fullData.forEach(d => {
-        const [ano, mes] = d.dateStr.split('-');
-        const key = `${mes}/${ano}`;
-        if (!map[key]) map[key] = { debito: 0, pagto: 0, sortKey: `${ano}${mes}` };
-        map[key].debito += (d.debitos || 0);
-        map[key].pagto += (d.pagamentos || 0);
-    });
-
-    const sortedKeys = Object.keys(map).sort((a,b) => map[a].sortKey - map[b].sortKey);
-    const seriesDebito = sortedKeys.map(k => map[k].debito);
-    const seriesPagto = sortedKeys.map(k => map[k].pagto);
-
-    const options = {
-        series: [{ name: 'Débitos', data: seriesDebito }, { name: 'Pagamentos', data: seriesPagto }],
-        chart: { type: 'bar', height: 400, toolbar: { show: false } },
-        plotOptions: { bar: { horizontal: false, columnWidth: '55%', dataLabels: { position: 'top' } } },
-        dataLabels: { enabled: true, offsetY: -20, style: { fontSize: '11px', colors: ['#000000ff'] }, formatter: formatCompact },
-        xaxis: { categories: sortedKeys },
-        yaxis: { labels: { formatter: formatCompact } },
-        colors: ['#0070C0', '#A6CAEC'],
-        legend: { position: 'top', horizontalAlign: 'left' },
-    };
-
-    if (chartEvolution) {
-        chartEvolution.updateOptions(options);
-    } else {
-        chartEvolution = new ApexCharts(document.querySelector("#chart-bar-evolution"), options);
-        chartEvolution.render();
+    // Garante que o gráfico de evolução seja renderizado
+    if(rawHistoricalData.length > 0) {
+        renderEvolutionChart(rawHistoricalData);
     }
+    // Aplica filtros e renderiza o restante
+    window.applyDashboardFilters();
 }
 
+// =========================================================
+// FUNÇÕES GLOBAIS (WINDOW) - ESSENCIAIS PARA O HTML FUNCIONAR
+// =========================================================
+
+// 1. APLICAR FILTROS
 window.applyDashboardFilters = function() {
     const startVal = document.getElementById('dash-date-start')?.value;
     const endVal = document.getElementById('dash-date-end')?.value;
@@ -89,25 +68,133 @@ window.applyDashboardFilters = function() {
     let endDate = endVal ? parseDateBR(endVal) : null;
     if (endDate) endDate.setHours(23, 59, 59, 999);
 
-    const filteredHistory = filterByDate(rawHistoricalData, startDate, endDate);
+    // 1. DADOS ESTRITOS (Respeita o filtro exato - Para KPIs e Pizza)
+    const filteredHistoryStrict = filterByDate(rawHistoricalData, startDate, endDate);
     
+    // 2. DADOS EXPANDIDOS (Mês Completo - Para o Gráfico de Linha)
+    let fullMonthStart = null;
+    let fullMonthEnd = null;
+    let prevFullStart = null;
+    let prevFullEnd = null;
+
+    if (startDate) {
+        // Pega o primeiro e o último dia do mês da data inicial selecionada
+        fullMonthStart = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+        fullMonthEnd = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
+        fullMonthEnd.setHours(23, 59, 59, 999);
+
+        // Calcula o mês anterior completo
+        prevFullStart = new Date(fullMonthStart);
+        prevFullStart.setMonth(prevFullStart.getMonth() - 1);
+        
+        prevFullEnd = new Date(fullMonthStart); // Começa do dia 1 do mês atual
+        prevFullEnd.setDate(0); // Volta 1 dia (último dia do mês anterior)
+        prevFullEnd.setHours(23, 59, 59, 999);
+    }
+
+    // Se não tiver filtro, usa o histórico total (ou define comportamento padrão)
+    const histFullMonthCurr = startDate ? filterByDate(rawHistoricalData, fullMonthStart, fullMonthEnd) : filteredHistoryStrict;
+    const histFullMonthPrev = startDate ? filterByDate(rawHistoricalData, prevFullStart, prevFullEnd) : [];
+
+    // --- Filtros Mês Anterior ESTRITO (Para KPIs comparativos se existissem) ---
     let prevStart = null, prevEnd = null;
     if(startDate && endDate) {
         prevStart = new Date(startDate); prevStart.setMonth(prevStart.getMonth() - 1);
         prevEnd = new Date(endDate); prevEnd.setMonth(prevEnd.getMonth() - 1);
     }
-    const prevHistory = filterByDate(rawHistoricalData, prevStart, prevEnd);
+    const prevHistoryStrict = filterByDate(rawHistoricalData, prevStart, prevEnd);
 
+    // --- Filtros RealTime ---
     const cobPagos = filterRealTime(rawRealTimeCobranca, startDate, endDate);
     const jurPagos = filterRealTime(rawRealTimeJuridico, startDate, endDate);
 
-    calculateGeneralMetrics(filteredHistory, cobPagos, jurPagos, prevHistory);
+    // RENDERIZAÇÃO
+    calculateGeneralMetrics(filteredHistoryStrict, cobPagos, jurPagos, prevHistoryStrict);
 
-    // Filtra histórico para 3ª Cobrança (Atual e Anterior)
-    const hist3CobCurr = filteredHistory.filter(d => d.etapa.includes('3'));
-    const hist3CobPrev = prevHistory.filter(d => d.etapa.includes('3'));
-    renderThirdCobSection(hist3CobCurr, hist3CobPrev);
+    // Filtra para 3ª Cobrança
+    const hist3CobStrict = filteredHistoryStrict.filter(d => d.etapa.includes('3'));
+    
+    // Filtra FULL MONTH para o gráfico de evolução
+    const hist3CobFullCurr = histFullMonthCurr.filter(d => d.etapa.includes('3'));
+    const hist3CobFullPrev = histFullMonthPrev.filter(d => d.etapa.includes('3'));
+
+    // Passamos agora 3 conjuntos de dados: Estrito (KPIs), Full Atual (Gráfico) e Full Anterior (Gráfico)
+    renderThirdCobSection(hist3CobStrict, hist3CobFullCurr, hist3CobFullPrev);
 };
+
+// 2. LIMPAR FILTROS
+window.clearDashboardFilters = function() {
+    const startEl = document.getElementById('dash-date-start');
+    const endEl = document.getElementById('dash-date-end');
+    if(startEl) startEl.value = '';
+    if(endEl) endEl.value = '';
+    window.applyDashboardFilters();
+};
+
+// 3. ABRIR MODAL (A FUNÇÃO QUE ESTAVA DANDO ERRO)
+window.openImportBiModal = function() {
+    const el = document.getElementById('import-bi-modal');
+    if(el) { 
+        el.classList.remove('modal-hidden'); 
+        el.style.display = 'flex'; 
+    } else {
+        console.error("Modal #import-bi-modal não encontrado no HTML");
+    }
+};
+
+// 4. PROCESSAR IMPORTAÇÃO
+window.processImportBi = async function() {
+    const raw = document.getElementById('import-bi-data').value;
+    if(!raw) return alert("Cole os dados.");
+
+    const lines = raw.trim().split('\n');
+    let count = 0;
+    const batchData = {};
+
+    lines.forEach(line => {
+        const cols = line.split('\t');
+        if(cols.length < 5) return;
+        
+        const cleanVal = (v) => (!v ? 0 : parseFloat(v.replace('R$','').replace(/\./g,'').replace(',','.').trim()) || 0);
+        const cleanInt = (v) => (!v ? 0 : parseInt(v.trim()) || 0);
+        
+        const etapa = cols[0].trim();
+        const dataStr = cols[1].trim();
+        const disparos = cleanInt(cols[2]);
+        const debitos = cleanVal(cols[3]);
+        const pagamentos = cleanVal(cols[4]);
+        
+        const pagCartao = cols.length > 6 ? cleanInt(cols[6]) : 0;
+        const pagPix = cols.length > 7 ? cleanInt(cols[7]) : 0;
+        const pagBoleto = cols.length > 8 ? cleanInt(cols[8]) : 0;
+
+        const parts = dataStr.split('/');
+        if(parts.length !== 3) return;
+        const docId = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        const fieldKey = etapa.replace('º','').replace('°','').replace('ª','').replace(/ /g,'_').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+        if(!batchData[docId]) batchData[docId] = {};
+        batchData[docId][fieldKey] = { disparos, debitos, pagamentos, pag_cartao: pagCartao, pag_pix: pagPix, pag_boleto: pagBoleto };
+        count++;
+    });
+
+    try {
+        const batch = writeBatch(db);
+        for (const [docId, fields] of Object.entries(batchData)) {
+            const docRef = doc(db, "metricas_diarias", docId);
+            batch.set(docRef, { ...fields, updatedAt: new Date() }, { merge: true });
+        }
+        await batch.commit();
+        alert(`${count} linhas importadas!`);
+        document.getElementById('import-bi-modal').classList.add('modal-hidden');
+        document.getElementById('import-bi-modal').style.display = 'none';
+        document.getElementById('import-bi-data').value = '';
+    } catch(e) { console.error(e); alert("Erro ao importar."); }
+};
+
+// =========================================================
+// FUNÇÕES AUXILIARES E GRÁFICOS
+// =========================================================
 
 function filterByDate(data, start, end) {
     return data.filter(item => {
@@ -129,11 +216,43 @@ function filterRealTime(data, start, end) {
     });
 }
 
-window.clearDashboardFilters = function() {
-    document.getElementById('dash-date-start').value = '';
-    document.getElementById('dash-date-end').value = '';
-    window.applyDashboardFilters();
-};
+function renderEvolutionChart(fullData) {
+    const map = {};
+    fullData.forEach(d => {
+        const [ano, mes] = d.dateStr.split('-');
+        const key = `${mes}/${ano}`;
+        if (!map[key]) map[key] = { debito: 0, pagto: 0, sortKey: `${ano}${mes}` };
+        map[key].debito += (d.debitos || 0);
+        map[key].pagto += (d.pagamentos || 0);
+    });
+
+    const sortedKeys = Object.keys(map).sort((a,b) => map[a].sortKey - map[b].sortKey);
+    const seriesDebito = sortedKeys.map(k => map[k].debito);
+    const seriesPagto = sortedKeys.map(k => map[k].pagto);
+
+    const options = {
+        series: [{ name: 'Débitos', data: seriesDebito }, { name: 'Pagamentos', data: seriesPagto }],
+        chart: { type: 'bar', height: 400, toolbar: { show: false } },
+        plotOptions: { bar: { horizontal: false, columnWidth: '55%', dataLabels: { position: 'top' } } },
+        dataLabels: { enabled: true, offsetY: -20, style: { fontSize: '11px', colors: ['#304758'] }, formatter: formatCompact },
+        xaxis: { categories: sortedKeys },
+        yaxis: { labels: { formatter: formatCompact } },
+        colors: ['#007bff', '#9fc5e8'],
+        legend: { position: 'top', horizontalAlign: 'left' },
+        title: { text: undefined }
+    };
+
+    if (chartEvolution) {
+        chartEvolution.updateOptions({ xaxis: { categories: sortedKeys } });
+        chartEvolution.updateSeries(options.series);
+    } else {
+        const el = document.querySelector("#chart-bar-evolution");
+        if(el) {
+            chartEvolution = new ApexCharts(el, options);
+            chartEvolution.render();
+        }
+    }
+}
 
 function calculateGeneralMetrics(history, cobPagos, jurPagos, prevHistory) {
     let debito = 0, pagto = 0, disparos = 0;
@@ -170,18 +289,47 @@ function calculateGeneralMetrics(history, cobPagos, jurPagos, prevHistory) {
     renderPaymentChart(mapPgto);
 }
 
-// 2. SEÇÃO 3ª COBRANÇA (COMPARATIVO ATUAL X ANTERIOR)
-function renderThirdCobSection(currData, prevData) {
+function renderThirdCobSection(dataStrict, dataFullCurr, dataFullPrev) {
+    
+    // --- PARTE 1: KPIs e PIZZA (Usa dataStrict) ---
     let debito = 0, pagto = 0, disparos = 0;
+
+    dataStrict.forEach(d => {
+        debito += (d.debitos || 0);
+        pagto += (d.pagamentos || 0);
+        disparos += (d.disparos || 0);
+    });
+
+    updateEl('kpi-3cob-debito', formatMoney(debito));
+    updateEl('kpi-3cob-pago', formatMoney(pagto));
+    updateEl('kpi-3cob-disparos', disparos);
+    updateEl('kpi-3cob-conv', debito>0 ? ((pagto/debito)*100).toFixed(2)+'%' : '0%');
+
+    // Gráfico Pizza (Mantido com dados estritos)
+    const optionsPie = {
+        series: [Math.max(0, debito - pagto), pagto],
+        chart: { type: 'donut', height: 300 },
+        labels: ['Em Aberto', 'Recuperado'],
+        colors: ['#34495e', '#2ecc71'],
+        legend: { position: 'bottom' },
+        dataLabels: { enabled: true, formatter: (val) => val.toFixed(1) + "%" }
+    };
+
+    if (chart3CobPie) { chart3CobPie.updateSeries(optionsPie.series); } 
+    else { 
+        const el = document.querySelector("#chart-3cob-pie");
+        if(el) {
+            chart3CobPie = new ApexCharts(el, optionsPie); 
+            chart3CobPie.render(); 
+        }
+    }
+
+    // --- PARTE 2: GRÁFICO DE EVOLUÇÃO (Usa dataFullCurr e dataFullPrev) ---
     
-    // Mapa para gráfico de evolução (Semana -> Valor)
-    // Estrutura: { 1: {currDeb:0...}, 2: {...}, 3: {...}, 4: {...}, 5: {...} }
+    // Mapa: Semana (1-5) -> Valores
     const evoMap = { 1:{}, 2:{}, 3:{}, 4:{}, 5:{} };
-    
-    // Inicializa o mapa
     for(let i=1; i<=5; i++) evoMap[i] = { currDeb:0, currPag:0, prevDeb:0, prevPag:0 };
 
-    // Helper para descobrir a semana do dia
     const getWeek = (dateStr) => {
         const day = parseInt(dateStr.split('-')[2]);
         if (day <= 7) return 1;
@@ -191,30 +339,20 @@ function renderThirdCobSection(currData, prevData) {
         return 5;
     };
 
-    // Processa Atual
-    currData.forEach(d => {
-        debito += (d.debitos || 0);
-        pagto += (d.pagamentos || 0);
-        disparos += (d.disparos || 0);
-
+    // Processa Mês Atual COMPLETO
+    dataFullCurr.forEach(d => {
         const w = getWeek(d.dateStr);
         evoMap[w].currDeb += (d.debitos || 0);
         evoMap[w].currPag += (d.pagamentos || 0);
     });
 
-    // Processa Anterior
-    prevData.forEach(d => {
+    // Processa Mês Anterior COMPLETO
+    dataFullPrev.forEach(d => {
         const w = getWeek(d.dateStr);
         evoMap[w].prevDeb += (d.debitos || 0);
         evoMap[w].prevPag += (d.pagamentos || 0);
     });
 
-    updateEl('kpi-3cob-debito', formatMoney(debito));
-    updateEl('kpi-3cob-pago', formatMoney(pagto));
-    updateEl('kpi-3cob-disparos', disparos);
-    updateEl('kpi-3cob-conv', debito>0 ? ((pagto/debito)*100).toFixed(2)+'%' : '0%');
-
-    // Monta Séries
     const weeks = [1, 2, 3, 4, 5];
     const categories = weeks.map(w => `Semana ${w}`);
     
@@ -230,43 +368,77 @@ function renderThirdCobSection(currData, prevData) {
 
     const optionsEvo = {
         series: [
-            { name: 'Mês Passado', data: seriesPrev },
-            { name: 'Mês Atual', data: seriesCurr }
+            { name: 'Mês Passado', data: seriesPrev }, // Série Índice 0 (Sem rótulo)
+            { name: 'Mês Atual', data: seriesCurr }    // Série Índice 1 (Com rótulo)
         ],
-        chart: { type: 'line', height: 300, toolbar: { show: false } },
-        dataLabels: { enabled: true, formatter: (v) => v + '%' }, // Rótulos ativados
+        chart: { 
+            type: 'line', 
+            height: 300, 
+            toolbar: { show: false },
+            parentHeightOffset: 0
+        },
+        
+        // Garante comportamento de linha
+        plotOptions: { line: {} },
+
+        // --- RÓTULOS APENAS NO MÊS ATUAL ---
+        dataLabels: { 
+            enabled: true, 
+            enabledOnSeries: [1], // <--- O SEGREDO: Ativa só na Série 1 (Mês Atual)
+            formatter: (v) => v + '%',
+            textAnchor: 'middle',
+            offsetY: -10, // Flutua um pouco acima da bolinha
+            style: { 
+                fontSize: '10px', 
+                colors: ['#333'],
+                fontWeight: 'bold'
+            },
+            background: { 
+                enabled: true, 
+                foreColor: '#ffffff', 
+                padding: 4, 
+                borderRadius: 4,
+                borderWidth: 1, 
+                borderColor: '#ccc',
+                opacity: 0.9,
+                dropShadow: { enabled: false }
+            }
+        },
+        // -----------------------------------
+
         stroke: { curve: 'smooth', width: 3 },
         xaxis: { categories: categories },
-        colors: ['#adb5bd', '#0070C0'],
-        yaxis: { labels: { formatter: (v) => v + '%' } },
+        colors: ['#adb5bd', '#e67e22'], // Cinza (0) e Laranja (1)
+        yaxis: { 
+            labels: { formatter: (v) => v + '%' },
+            min: 0,
+            forceNiceScale: true 
+        },
         legend: { position: 'top' },
-        // REMOVIDO TÍTULO INTERNO PARA EVITAR DUPLICIDADE COM O HTML
-        title: { text: undefined } 
+        title: { text: undefined },
+        tooltip: {
+            enabled: true,
+            shared: true,
+            intersect: false,
+            y: { formatter: (val) => val + "%" }
+        },
+        grid: {
+            padding: { top: 20, bottom: 10, left: 10, right: 10 }
+        }
     };
 
     if (chart3CobEvo) {
         chart3CobEvo.updateOptions({ xaxis: { categories: categories } });
         chart3CobEvo.updateSeries(optionsEvo.series);
     } else {
-        chart3CobEvo = new ApexCharts(document.querySelector("#chart-3cob-evolution-line"), optionsEvo);
-        chart3CobEvo.render();
+        const el = document.querySelector("#chart-3cob-evolution-line");
+        if(el) {
+            chart3CobEvo = new ApexCharts(el, optionsEvo);
+            chart3CobEvo.render();
+        }
     }
-
-    // Gráfico Pizza (Mantido)
-    const optionsPie = {
-        series: [Math.max(0, debito - pagto), pagto],
-        chart: { type: 'donut', height: 300 },
-        labels: ['Em Aberto', 'Recuperado'],
-        colors: ['#34495e', '#2ecc71'],
-        legend: { position: 'bottom' },
-        dataLabels: { enabled: true, formatter: (val) => val.toFixed(1) + "%" }
-    };
-
-    if (chart3CobPie) { chart3CobPie.updateSeries(optionsPie.series); } 
-    else { chart3CobPie = new ApexCharts(document.querySelector("#chart-3cob-pie"), optionsPie); chart3CobPie.render(); }
 }
 
-// 3. COMPARATIVO MoM GERAL (Com Rótulos de Dados)
 function renderMoMChart(curr, prev) {
     const calc = (list) => {
         const m = {};
@@ -294,7 +466,6 @@ function renderMoMChart(curr, prev) {
         chart: { type: 'line', height: 350, toolbar: { show: false } },
         stroke: { curve: 'smooth', width: 3 },
         colors: ['#adb5bd', '#007bff'],
-        // RÓTULOS DE DADOS ATIVADOS
         dataLabels: { 
             enabled: true, 
             formatter: (val) => val + "%",
@@ -306,11 +477,16 @@ function renderMoMChart(curr, prev) {
         legend: { position: 'top' }
     };
     if(chartMoM){ chartMoM.updateOptions({xaxis:{categories:allCats}}); chartMoM.updateSeries(opts.series); }
-    else{ chartMoM=new ApexCharts(document.querySelector("#chart-line-mom"), opts); chartMoM.render(); }
+    else{ 
+        const el = document.querySelector("#chart-line-mom");
+        if(el) {
+            chartMoM = new ApexCharts(el, opts); 
+            chartMoM.render(); 
+        }
+    }
 }
 
-// ... (Funções auxiliares mantidas) ...
-function renderStatusChart(history) { /* igual */
+function renderStatusChart(history) {
     const porEtapa = {};
     history.forEach(d => {
         const n = d.etapa || 'Outros';
@@ -330,21 +506,42 @@ function renderStatusChart(history) { /* igual */
         xaxis:{categories:cats}
     };
     if(chartStatus){ chartStatus.updateOptions({xaxis:{categories:cats}}); chartStatus.updateSeries(opts.series); }
-    else{ chartStatus=new ApexCharts(document.querySelector("#chart-bar-status"), opts); chartStatus.render(); }
+    else{ 
+        const el = document.querySelector("#chart-bar-status");
+        if(el) {
+            chartStatus = new ApexCharts(el, opts); 
+            chartStatus.render(); 
+        }
+    }
 }
 
-function renderMetaChart(a, t) { /* igual */
+function renderMetaChart(a, t) {
     const p = t>0 ? Math.round((a/t)*100) : 0;
     const opts = { series:[p], chart:{type:'radialBar', height:340}, plotOptions:{radialBar:{hollow:{size:'65%'}, dataLabels:{value:{offsetY:10, fontSize:'30px', show:true, formatter:v=>v+'%'}}}}, fill:{colors:['#28a745']}, labels:['Recuperação'] };
-    document.getElementById('meta-text-display').innerText = `${formatMoney(a)} / ${formatMoney(t)}`;
-    if(chartMeta) chartMeta.updateSeries([p]); else { chartMeta=new ApexCharts(document.querySelector("#chart-gauge-meta"), opts); chartMeta.render(); }
+    const txt = document.getElementById('meta-text-display');
+    if(txt) txt.innerText = `${formatMoney(a)} / ${formatMoney(t)}`;
+    
+    if(chartMeta) chartMeta.updateSeries([p]); 
+    else { 
+        const el = document.querySelector("#chart-gauge-meta");
+        if(el) {
+            chartMeta = new ApexCharts(el, opts); 
+            chartMeta.render(); 
+        }
+    }
 }
 
-function renderPaymentChart(map) { /* igual */
+function renderPaymentChart(map) {
     Object.keys(map).forEach(k=>{if(map[k]===0)delete map[k]});
     const opts = { series:Object.values(map), labels:Object.keys(map), chart:{type:'donut', height:320}, colors:['#008FFB', '#00E396', '#FEB019', '#FF4560'] };
     if(chartPayment){ chartPayment.updateOptions({labels:Object.keys(map)}); chartPayment.updateSeries(Object.values(map)); }
-    else{ chartPayment=new ApexCharts(document.querySelector("#chart-pie-payment"), opts); chartPayment.render(); }
+    else{ 
+        const el = document.querySelector("#chart-pie-payment");
+        if(el) {
+            chartPayment = new ApexCharts(el, opts); 
+            chartPayment.render(); 
+        }
+    }
 }
 
 function getVal(v) { return typeof v==='string'?parseFloat(v.replace('R$','').replace(/\./g,'').replace(',','.')):(v||0); }
