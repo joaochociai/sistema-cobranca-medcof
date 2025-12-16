@@ -11,6 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://npmcdn.com/flatpickr/dist/l10n/pt.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <link rel="stylesheet" href="style.css">
 </head>
@@ -87,7 +88,7 @@
                 
 
 
-                <button class="nav-tab logout-btn" onclick="window.logoutSystem()">🔒 Sair</button>
+                <button class="nav-tab logout-btn" onclic   k="window.logoutSystem()">🔒 Sair</button>
             </div>
         </div>
         
@@ -222,7 +223,7 @@
                     <div id="chart-bar-evolution"></div>
                 </div>
 
-                <h2 class="section-title" style="border-left-color: #d35400; color: #d35400;">📞 Foco: 3ª Cobrança</h2>
+                <h2 class="section-title" style="border-left-color: #d35400; color: #4b4b4b;">📞 3ª Cobrança</h2>
 
                 <div class="kpi-grid-powerbi">
                     <div class="kpi-pbi-card" style="border-left-color: #d35400;"><div class="kpi-label">💲 Débitos (3ª Cob)</div><div class="kpi-value" id="kpi-3cob-debito">R$ 0,00</div></div>
@@ -255,9 +256,9 @@
                         <label>Motivo do Link:</label>
                         <select name="Motivo" required>
                             <option value="" disabled selected>Selecione o motivo</option>
-                            <option value="Renegociacao Shuri">Renegociação Shuri</option>
-                            <option value="Valor Diluido">Valor diluído</option>
-                            <option value="Link Pagamento GURU">Link de pagamento GURU</option>
+                            <option value="Link de pagamento Mercury">Link de pagamento Mercury</option>
+                            <option value="Renegociação Mercury">Renegociação Mercury</option>
+                            <option value="Link de pagamento GURU">Link de pagamento GURU</option>
                             <option value="Cancelamento">Cancelamento</option>
                             <option value="Parcelas vencidas somadas">Parcelas vencidas somadas</option>
                         </select>
@@ -343,14 +344,29 @@
                 <div class="form-container juridico-border">
                     <form id="juridico-form" class="professional-form">
                         
-                        <input name="Nome" type="text" placeholder="Nome do Aluno" required autocomplete="off">
-                        <input name="Email" type="email" placeholder="E-mail" required autocomplete="off">
+                        <input name="Nome" type="text" placeholder="Nome do Aluno*" required autocomplete="off">
+                        <input name="Email" type="email" placeholder="E-mail*" required autocomplete="off">
+                        <input name="Telefone" type="tel" placeholder="Telefone" autocomplete="off">
 
                         <label>Data para Ação:</label>
-                        <input name="DataAcao" id="datepicker-juridico" type="text" placeholder="Selecione a data" required autocomplete="off">
+                        <input name="DataAcao" id="datepicker-juridico" type="text" placeholder="Selecione a data*" required autocomplete="off">
 
-                        <label>Ação Necessária:</label>
-                        <input name="Acao" type="text" placeholder="Ex: Enviar link, Chamar aluno" required autocomplete="off">
+                        <label>Ação:</label>
+                        <select name="Ação" required>
+                            <option value="" disabled selected>Selecione o motivo*</option>
+                            <option value="Link de pagamento Mercury">Link de pagamento Mercury</option>
+                            <option value="Renegociação Mercury">Renegociação Mercury</option>
+                            <option value="Link de pagamento GURU">Link de pagamento GURU</option>
+                            <option value="Renegociação GURU">Renegociação GURU</option>
+                            <option value="Cancelamento">Cancelamento</option>
+                            <option value="Olhar se pagou">Olhar se pagou</option>
+                            <option value="Chamar no chat">Chamar no chat</option>
+                        </select>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <input name="QtdParcelas" type="number" placeholder="Qtd. Parcelas" min="1" autocomplete="off">
+                            <input name="ValorParcela" type="text" placeholder="Valor Parcela (R$)" autocomplete="off">
+                        </div>
 
                         <label>Observações:</label>
                         <textarea 
@@ -373,13 +389,9 @@
                 <h1 class="juridico-title">CALENDÁRIO JURÍDICO</h1>
 
                 <div class="calendar-controls-wrapper">
-                    <button class="juridico-btn-small" onclick="window.changeMonth(-1, 'juridico')">
-                        &lt; Anterior
-                    </button>
+                    <button class="juridico-btn-small" onclick="window.changeJuridicoMonth(-1)">&lt; Anterior</button>
                     <span id="juridicoMonthDisplay" class="juridico-month-label"></span>
-                    <button class="juridico-btn-small" onclick="window.changeMonth(1, 'juridico')">
-                        Próximo &gt;
-                    </button>
+                    <button class="juridico-btn-small" onclick="window.changeJuridicoMonth(1)">Próximo &gt;</button>
                 </div>
 
                 <div id="juridico-calendar-view"></div>
