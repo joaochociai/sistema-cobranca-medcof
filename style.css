@@ -302,10 +302,19 @@ h1 {
    9. MODAL E ALERTA
    ========================================= */
 .modal-hidden { display: none; }
-#modal-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background-color: rgba(0, 0, 0, 0.5); z-index: 2000; backdrop-filter: blur(3px);
-    display: flex; justify-content: center; align-items: center;
+.modal-overlay {
+    position: fixed;   /* OBRIGATÓRIO: Faz flutuar */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* Fundo escuro transparente */
+    z-index: 9999;     /* Garante que fique na frente de tudo */
+    display: flex;     /* Centraliza o conteúdo */
+    justify-content: center;
+    align-items: center;
+    opacity: 1;
+    transition: opacity 0.3s ease;
 }
 #modal-box {
     background-color: #ffffff; padding: 30px; border-radius: 12px;
@@ -2546,4 +2555,121 @@ body.is-admin div.admin-only {
     min-height: 100px;
     resize: vertical;
     line-height: 1.5;
+}
+
+/* =========================================
+   BOTÕES MODERNOS - MODAL DE DETALHES
+   ========================================= */
+
+.btn-modern-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); /* Animação fluida */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Efeito ao passar o mouse (Levanta e aumenta sombra) */
+.btn-modern-action:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Efeito ao clicar (Afunda levemente) */
+.btn-modern-action:active {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Botão Editar (Gradiente Roxo) */
+.btn-edit-juridico {
+    background: linear-gradient(135deg, #7d3c98 0%, #5b2c83 100%);
+    color: white;
+}
+.btn-edit-juridico:hover {
+    background: linear-gradient(135deg, #8e44ad 0%, #6c3483 100%);
+}
+
+/* Botão Excluir (Branco com borda vermelha e hover vermelho) */
+.btn-delete-juridico {
+    background-color: #ffffff;
+    color: #dc3545;
+    border: 2px solid #f8d7da;
+}
+
+.btn-delete-juridico:hover {
+    border-color: #dc3545;
+    background-color: #fff5f5;
+    color: #c82333;
+}
+
+/* Ajuste na tabela para ficar mais espaçada */
+.details-table th {
+    padding-top: 12px;
+    padding-bottom: 12px;
+    color: #666;
+    font-weight: 600;
+}
+.details-table td {
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+/* =========================================
+   ESTILO DO DASHBOARD JURÍDICO (KPIs)
+   ========================================= */
+
+/* O Container dos Cards */
+#juridico-kpi-container {
+    display: grid;
+    /* Isso faz a mágica: cria colunas automáticas com largura mínima de 160px */
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
+    gap: 15px; /* Espaço entre os cards */
+    margin-bottom: 25px;
+    width: 100%;
+}
+
+/* O Visual de Cada Card */
+#juridico-kpi-container > div {
+    background: #fff;
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05); /* Sombra suave */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border-left-width: 5px !important; /* Garante que a borda colorida apareça */
+}
+
+/* Efeito ao passar o mouse */
+#juridico-kpi-container > div:hover {
+    transform: translateY(-5px); /* Sobe um pouquinho */
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+}
+
+/* Ajuste no texto dos labels */
+#juridico-kpi-container > div > div:first-child {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+    font-weight: 700;
+}
+
+/* Ajuste no texto dos valores */
+#juridico-kpi-container > div > div:last-child {
+    font-size: 20px;
+    color: #2c3e50;
+    font-weight: 800;
 }

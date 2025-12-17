@@ -12,6 +12,7 @@
     <script src="https://npmcdn.com/flatpickr/dist/l10n/pt.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <link rel="stylesheet" href="style.css">
 </head>
@@ -39,6 +40,8 @@
                 <button id="btn-home" class="nav-tab" onclick="window.showTab('tab-home', this)">🏠 Início</button>
 
                 <button id="btn-dashboard" class="nav-tab admin-only" onclick="window.showTab('tab-dashboard', this)" style="background-color: #343a40; color: #ffc107;">📊 Dashboard</button>
+                
+                <button id="btn-dash-juridico" class="nav-tab admin-only" onclick="window.showTab('tab-dash-juridico', this)" style="background-color: #0d47a1; color: white;">⚖️ Dash Jurídico</button>
 
                 <div class="sector-group" data-sector="cobranca">
                     <button class="nav-tab sector-btn" data-sector="cobranca" onclick="showTab('tab-escala', this)">📅 Escala Mensal</button>
@@ -240,6 +243,50 @@
                     <div class="chart-box small-chart">
                         <h3>⚖️ Débitos x Pagamentos</h3>
                         <div id="chart-3cob-pie"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-dash-juridico" class="tab-content hidden">
+                <div class="dashboard-header" style="background: linear-gradient(135deg, #0d47a1, #1565c0); padding: 20px; border-radius: 10px; color: white; margin-bottom: 20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <h2 style="margin:0; font-size:24px;">Dashboard Jurídico</h2>
+                            <p style="margin:0; opacity:0.8;">Indicadores de Performance e Recuperação</p>
+                        </div>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <input type="date" id="dash-jur-start" class="date-filter" style="border:none;">
+                            <span style="font-weight:bold;">até</span>
+                            <input type="date" id="dash-jur-end" class="date-filter" style="border:none;">
+                            <button onclick="window.loadJuridicoDashboard()" style="background:white; color:#0d47a1; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; font-weight:bold;">Filtrar</button>
+                            <button onclick="window.openImportDashJuridico()" style="background:#ffca28; color:#333; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; font-weight:bold; margin-left:10px;">📥 Importar Dados</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kpi-grid" id="juridico-kpi-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px;">
+                    </div>
+
+                <div class="charts-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    
+                    <div class="chart-card" style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+                        <h3 style="color:#0d47a1; margin-bottom:15px;">Retorno dos Disparos</h3>
+                        <canvas id="chart-jur-funil"></canvas>
+                    </div>
+
+                    <div class="chart-card" style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+                        <h3 style="color:#0d47a1; margin-bottom:15px;">Comparativo de Recuperação (Mês Anterior)</h3>
+                        <canvas id="chart-jur-recuperacao"></canvas>
+                    </div>
+
+                    <div class="chart-card" style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+                        <h3 style="color:#0d47a1; margin-bottom:15px;">Histórico de Disparos (Últimos 12 meses)</h3>
+                        <canvas id="chart-jur-historico"></canvas>
+                    </div>
+
+                    <div class="chart-card" style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+                        <h3 style="color:#0d47a1; margin-bottom:15px;">Comparativo Anual (Disparos, Débitos, Pagos)</h3>
+                        <canvas id="chart-jur-anual"></canvas>
                     </div>
                 </div>
             </div>
@@ -653,6 +700,21 @@
                     <div class="proposal-item"><label>Proposta 3:</label><textarea id="prop-3" onblur="window.saveProposal(3)"></textarea></div>
                     <div class="proposal-item"><label>Observações:</label><textarea id="prop-4" onblur="window.saveProposal(4)"></textarea></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-import-dash-juridico" class="modal-overlay modal-hidden">
+        <div class="modal-content" style="max-width: 500px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+            <h3 style="color:#0d47a1; margin-top:0;">Importar Dados (Dashboard Jurídico)</h3>
+            <p style="font-size:12px; color:#666; margin-bottom:10px;">
+                Cole as colunas na ordem:<br>
+                Data | Disparos | Débitos | Interações | Neg. Info | Acordos Info | Pagamentos | Neg. Email | Acordos Email | Cancel. | Rec. Perdida | Termos
+            </p>
+            <textarea id="import-dash-juridico-text" rows="10" placeholder="Cole os dados do Excel aqui..." style="width:100%; padding:10px; border:1px solid #ddd; border-radius:5px;"></textarea>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
+                <button onclick="document.getElementById('modal-import-dash-juridico').classList.add('modal-hidden')" style="padding: 8px 15px; cursor: pointer; background: #ccc; border: none; border-radius: 5px;">Cancelar</button>
+                <button onclick="window.processImportDashJuridico()" style="background:#0d47a1; color:white; border:none; padding:8px 20px; border-radius:5px; cursor: pointer;">Processar</button>
             </div>
         </div>
     </div>
