@@ -270,6 +270,44 @@ window.changeJuridicoMonth = function(delta) {
     renderJuridicoCalendar();
 }
 
+window.deleteJuridicoAppointment = async function(id) {
+    // 1. Confirmação de Segurança
+    const result = await Swal.fire({
+        title: 'Excluir Agendamento?',
+        text: "Essa ação é irreversível e removerá o item do calendário.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545', // Vermelho Perigo
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sim, excluir',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+        // 2. Loading
+        Swal.fire({ title: 'Excluindo...', didOpen: () => Swal.showLoading() });
+
+        // 3. Deleta do Firestore
+        await deleteDoc(doc(db, "juridico_agendamentos", id));
+
+        // 4. Fecha o modal de detalhes (que está aberto por baixo)
+        const detailsModal = document.getElementById('details-modal-overlay');
+        if(detailsModal) {
+            detailsModal.classList.add('modal-hidden');
+            detailsModal.style.display = 'none';
+        }
+
+        // 5. Sucesso
+        Swal.fire('Excluído!', 'O agendamento foi removido.', 'success');
+
+    } catch (err) {
+        console.error("Erro ao excluir:", err);
+        Swal.fire('Erro', 'Não foi possível excluir o registro.', 'error');
+    }
+};
+
 window.initJuridicoForm = initJuridicoForm;
 window.loadJuridicoData = loadJuridicoData;
 window.renderJuridicoCalendar = renderJuridicoCalendar;

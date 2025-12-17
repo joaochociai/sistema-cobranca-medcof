@@ -4,7 +4,7 @@ console.log("--> Carregando módulo cobrança...");
 import { db, auth } from './firebase.js'; 
 import {
   collection, getDocs, query, orderBy, addDoc,
-  updateDoc, doc, arrayUnion, deleteDoc, where // <--- 'where' adicionado aqui
+  updateDoc, doc, arrayUnion, deleteDoc, where 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import { formatDateUTC, parseDateBR, mapStatusToLabel } from './utils.js';
@@ -23,7 +23,7 @@ function getCurrentUserEmail() {
 }
 
 // -------------------------
-// 1. CARREGAR E FILTRAR
+// 1. CARREGAR E FILTRAR (LÓGICA NOVA)
 // -------------------------
 export async function loadCobrancaData() {
   const container = document.getElementById('cobranca-list');
@@ -33,24 +33,40 @@ export async function loadCobrancaData() {
     const q = query(collection(db, COBRANCA_COLLECTION), orderBy("createdAt", "desc"));
     const querySnapshot = await getDocs(q);
 
-    window.cobrancaList = [];
+    const rawList = [];
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
     querySnapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      
-      let dataJuridico = null;
-      if (data.Data1Jur?.toDate) dataJuridico = data.Data1Jur.toDate();
-      else if (typeof data.Data1Jur === 'string' && data.Data1Jur.trim() !== '') dataJuridico = new Date(data.Data1Jur);
-
-      const expirado = dataJuridico && hoje >= dataJuridico;
-
-      if (data.Status === 'Ativo' && !expirado) {
-        window.cobrancaList.push({ id: docSnap.id, ...data });
-      }
+        rawList.push({ id: docSnap.id, ...docSnap.data() });
     });
 
+    // --- FILTRO: JANELA DE 31 A 45 DIAS ---
+    window.cobrancaList = rawList.filter(aluno => {
+        // 1. Se já pagou, remove
+        if (aluno.Status === 'Pago') return false;
+
+        // 2. Se não tem vencimento, mostra por segurança (ou oculte se preferir)
+        if (!aluno.Vencimento) return true;
+
+        // 3. Cálculo de dias
+        const dataVenc = parseDateBR(aluno.Vencimento);
+        if (!dataVenc) return true; // Data inválida, mostra para corrigir
+        
+        dataVenc.setHours(0, 0, 0, 0);
+        
+        const diffTime = hoje - dataVenc;
+        const diasAtraso = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        // Salva para exibir no card
+        aluno.diasAtrasoCalculado = diasAtraso;
+
+        // REGRA: Mostrar apenas entre 31 e 45 dias
+        // (Antes de 31 é Cobrança Inicial, depois de 45 vira Jurídico)
+        return diasAtraso >= 31 && diasAtraso <= 45;
+    });
+
+    // Atualiza contador KPI
     const kpiEl = document.getElementById('total-active-count');
     if (kpiEl) kpiEl.textContent = window.cobrancaList.length;
 
@@ -63,6 +79,9 @@ export async function loadCobrancaData() {
 }
 window.loadCobrancaData = loadCobrancaData;
 
+// -------------------------
+// 2. RENDERIZAR LISTA
+// -------------------------
 export function filterCobranca() {
     const term = document.getElementById('cobranca-search').value.toLowerCase();
     if (!term) {
@@ -78,9 +97,6 @@ export function filterCobranca() {
 }
 window.filterCobranca = filterCobranca;
 
-// -------------------------
-// 2. RENDERIZAR LISTA
-// -------------------------
 export function renderCobrancaList(data) {
   const container = document.getElementById('cobranca-list');
   if (!container) return;
@@ -88,52 +104,50 @@ export function renderCobrancaList(data) {
   container.innerHTML = '';
 
   if (!data || data.length === 0) {
-    container.innerHTML = '<p class="empty-msg">Nenhum aluno encontrado.</p>';
+    container.innerHTML = '<p class="empty-msg">Nenhum aluno na fase de 3ª Cobrança.</p>';
     return;
   }
 
-  // Ordenação por data de criação
-  const sortedData = data.sort((a, b) => {
-    const tA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
-    const tB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
-    return tB - tA;
-  });
+  const sortedData = data.sort((a, b) => (a.diasAtrasoCalculado || 0) - (b.diasAtrasoCalculado || 0));
 
   sortedData.forEach(aluno => {
-    const dataLimite = aluno.Data1Jur ? formatDateUTC(aluno.Data1Jur) : 'N/A';
-    
-    // Status
-    const statusTipo = aluno.StatusExtra?.tipo || "nenhum";
-    const safeClass = String(statusTipo).replace(/_/g, '-').replace(/\s+/g, '-').toLowerCase();
-    const statusLabelHtml = aluno.StatusExtra?.tipo
-      ? `<p class="extra-status">${mapStatusToLabel(aluno.StatusExtra.tipo)}</p>`
-      : '';
-
-    const ligaCount = aluno.LigaEtapa || 0;
-    const msgCount = aluno.TemplateEtapa || 0;
-
-    const card = document.createElement('div');
-    card.className = `cobranca-card status-${safeClass}`;
-
-    card.innerHTML = `
-      <div class="card-info">
-        <h3>${aluno.Nome}</h3>
-        <p style="margin-top:10px;"><strong>Curso:</strong> ${aluno.Curso || '-'}</p>
-        <p><strong>Valor:</strong> ${aluno.Valor || '-'} | <strong>Venc:</strong> ${aluno.Vencimento || '-'}</p>
-        <p style="margin-top:5px; font-size:12px; color:#555;">
-           📞 Ligações: <strong>${ligaCount}</strong> | 💬 Templates: <strong>${msgCount}</strong>
-        </p>
-        <p class="limit-date">⚠️ Jurídico em: ${dataLimite}</p>
-        ${statusLabelHtml}
-      </div>
-      <div class="card-actions">
-        <button class="btn-actions-open" onclick="window.openActionsModal('${aluno.id}')">⚡ Ações</button>
-        <div class="small-actions">
-          <button class="icon-btn trash-icon admin-only" onclick="window.archiveStudent('${aluno.id}')">🗑️</button>
+      // Badge de dias
+      const diasLabel = aluno.diasAtrasoCalculado 
+          ? `<span style="background:#fff3cd; color:#856404; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold; margin-left:5px;">${aluno.diasAtrasoCalculado} dias</span>`
+          : '';
+      
+      const dataLimite = aluno.Data1Jur ? formatDateUTC(aluno.Data1Jur) : 'N/A';
+      const statusTipo = aluno.StatusExtra?.tipo || "nenhum";
+      const safeClass = String(statusTipo).replace(/_/g, '-').replace(/\s+/g, '-').toLowerCase();
+      const statusLabelHtml = aluno.StatusExtra?.tipo
+        ? `<p class="extra-status">${mapStatusToLabel(aluno.StatusExtra.tipo)}</p>`
+        : '';
+  
+      const ligaCount = aluno.LigaEtapa || 0;
+      const msgCount = aluno.TemplateEtapa || 0;
+  
+      const card = document.createElement('div');
+      card.className = `cobranca-card status-${safeClass}`;
+  
+      card.innerHTML = `
+        <div class="card-info">
+          <h3>${aluno.Nome}</h3>
+          <p style="margin-top:10px;"><strong>Curso:</strong> ${aluno.Curso || '-'}</p>
+          <p><strong>Valor:</strong> ${aluno.Valor || '-'} | <strong>Venc:</strong> ${aluno.Vencimento || '-'} ${diasLabel}</p>
+          <p style="margin-top:5px; font-size:12px; color:#555;">
+             📞 Ligações: <strong>${ligaCount}</strong> | 💬 Templates: <strong>${msgCount}</strong>
+          </p>
+          <p class="limit-date">⚠️ Jurídico em: ${dataLimite}</p>
+          ${statusLabelHtml}
         </div>
-      </div>
-    `;
-    container.appendChild(card);
+        <div class="card-actions">
+          <button class="btn-actions-open" onclick="window.openActionsModal('${aluno.id}')">⚡ Ações</button>
+          <div class="small-actions">
+            <button class="icon-btn trash-icon admin-only" onclick="window.archiveStudent('${aluno.id}')">🗑️</button>
+          </div>
+        </div>
+      `;
+      container.appendChild(card);
   });
 }
 window.renderCobrancaList = renderCobrancaList;

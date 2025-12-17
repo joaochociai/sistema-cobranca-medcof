@@ -192,6 +192,23 @@ window.showTab = async function(tabId, clickedButton) {
       window.initDashboard();
   }
 
+  if (tabId === 'tab-dash-juridico') {
+      // Verifica se a função já foi carregada
+      if (typeof window.loadJuridicoDashboard !== 'function') {
+          try {
+               // Importa o arquivo novo dinamicamente
+              const mod = await import('./dashboard_juridico.js');
+              // Executa a função principal dele
+               if (mod.loadJuridicoDashboard) mod.loadJuridicoDashboard();
+          } catch (e) { 
+               console.error("Erro ao carregar Dashboard Jurídico:", e); 
+          }
+      } else {
+          // Se já carregou antes, só executa
+          window.loadJuridicoDashboard();
+        }
+    }
+
   // 3. Histórico Separado
   if (tabId === 'tab-lista-cobranca') {
       if (window.loadCobrancaHistory) window.loadCobrancaHistory();

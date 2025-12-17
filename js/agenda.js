@@ -136,7 +136,7 @@ window.showDetailsGeneric = function(id, type) {
     if (!data && type === 'juridico' && window.juridicoAppointments) {
         data = window.juridicoAppointments.find(a => a.id === id);
     }
-    // Fallback: Busca no histórico de cobrança se não achar
+    // Fallback: Busca no histórico de cobrança
     if (!data && window.cobrancaList) data = window.cobrancaList.find(a => a.id === id);
 
     if (!data) return Swal.fire('Ops', 'Agendamento não encontrado.', 'warning');
@@ -151,7 +151,15 @@ window.showDetailsGeneric = function(id, type) {
         return isNaN(d) ? val : d.toLocaleDateString('pt-BR');
     };
 
-    const valor = data.ValorParcela ? parseFloat(data.ValorParcela).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
+    // Formata Valor Monetário
+    const rawValor = data.ValorParcela ? parseFloat(data.ValorParcela) : 0;
+    const valorFormatted = rawValor > 0 
+        ? rawValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) 
+        : '-';
+    
+    // Formata Parcelas
+    const parcelas = data.QtdParcelas ? `${data.QtdParcelas}x` : '-';
+    const infoFinanceira = (rawValor > 0) ? `<strong>${parcelas} de ${valorFormatted}</strong>` : '-';
 
     let content = '';
     let headerColor = '#007bff'; 
@@ -165,38 +173,52 @@ window.showDetailsGeneric = function(id, type) {
         const dataAcao = safeDate(data.DataAcao);
         
         // Ícone de Status
-        let statusHtml = "⏳ PENDENTE";
-        if (data.concluido) statusHtml = "✅ CONCLUÍDO";
+        let statusHtml = '<span style="color:#f39c12; font-weight:bold;">⏳ PENDENTE</span>';
+        if (data.concluido) statusHtml = '<span style="color:#28a745; font-weight:bold;">✅ CONCLUÍDO</span>';
 
         content = `
             <table class="details-table">
                 <tr><th>Nome</th><td>${data.Nome}</td></tr>
                 <tr><th>E-mail</th><td>${data.Email || '-'}</td></tr>
+                <tr><th>Telefone</th><td>${data.Telefone || '-'}</td></tr>
                 
-                <tr><th>Ação</th><td style="color: #007bff; font-weight: bold;">${data.Acao || data["Ação"] || 'Verificar'}</td></tr>
+                <tr><td colspan="2" style="border-bottom:none; padding-top:15px; color:#aaa; font-size:11px; text-transform:uppercase; letter-spacing:1px;">Dados do Agendamento</td></tr>
                 
+                <tr><th>Ação</th><td style="color: #007bff; font-weight: 800;">${data.Acao || data["Ação"] || 'Verificar'}</td></tr>
+                <tr><th>Financeiro</th><td>${infoFinanceira}</td></tr>
                 <tr><th>Data Ação</th><td>${dataAcao}</td></tr>
                 <tr><th>Status</th><td>${statusHtml}</td></tr>
-                <tr><th>Observação</th><td style="white-space: pre-wrap;">${data.Observacao || '-'}</td></tr>
+                <tr><th>Observação</th><td style="white-space: pre-wrap; font-style:italic;">${data.Observacao || '-'}</td></tr>
             </table>`;
             
-        // Botão Roxo de Editar (Igual ao seu print)
+        // Botões Modernos
         extraButtons = `
-            <button onclick="window.editJuridico('${data.id}')" 
-                style="margin-top:20px; width:100%; background:#6A1B9A; color:white; border:none; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:14px; transition: background 0.2s;">
-                ✏️ Editar Processo
-            </button>
+            <div style="display:flex; gap:10px; margin-top:25px; flex-direction:column;">
+                <button onclick="window.editJuridico('${data.id}')" class="btn-modern-action btn-edit-juridico">
+                    ✏️ Editar Processo
+                </button>
         `;
 
+        // Botão de Excluir (Apenas Admin)
+        if (window.currentUserRole === 'admin') {
+            extraButtons += `
+                <button onclick="window.deleteJuridicoAppointment('${data.id}')" class="btn-modern-action btn-delete-juridico">
+                    🗑️ Excluir Agendamento
+                </button>
+            `;
+        }
+        
+        extraButtons += `</div>`;
+
     } else {
-        // Layout Padrão (Cobrança)
+        // Layout Padrão (Cobrança) - Mantido igual
         content = `
             <table class="details-table">
                 <tr><th>Aluno</th><td>${data.Nome}</td></tr>
                 <tr><th>Curso</th><td>${data.Curso || '-'}</td></tr>
                 <tr><th>Telefone</th><td>${data.Telefone || '-'}</td></tr>
                 <tr><th>Motivo</th><td>${data.Motivo || '-'}</td></tr>
-                <tr><th>Valor</th><td>${valor}</td></tr>
+                <tr><th>Valor</th><td>${valorFormatted} (${parcelas})</td></tr>
                 <tr><th>Vencimento</th><td>${safeDate(data.DataVencimento)}</td></tr>
                 <tr><th>Gerar Link</th><td><strong>${safeDate(data.DataGerarLink)}</strong></td></tr>
                 <tr><th>Observação</th><td style="white-space: pre-wrap;">${data.Observacao || '-'}</td></tr>

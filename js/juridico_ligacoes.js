@@ -1,5 +1,5 @@
 // js/juridico_ligacoes.js
-console.log("--> Carregando módulo juridico_ligacoes...");
+console.log("--> Carregando módulo juridico_ligacoes (Regra 46-59 dias)...");
 
 import { db, auth } from "./firebase.js";
 import {
@@ -15,7 +15,7 @@ window.juridicoList = [];
 let currentJuridicoActionId = null;
 
 // -------------------------
-// 1. LOAD DATA
+// 1. CARREGAMENTO COM FILTRO DE DIAS
 // -------------------------
 export async function loadJuridicoLigacoes() {
   const container = document.getElementById('juridico-ligacoes-list');
@@ -25,9 +25,38 @@ export async function loadJuridicoLigacoes() {
     const q = query(collection(db, JURIDICO_COLLECTION), orderBy("createdAt", "desc"));
     const snap = await getDocs(q);
 
-    window.juridicoList = [];
-    snap.forEach(s => window.juridicoList.push({ id: s.id, ...s.data() }));
+    const rawList = [];
+    snap.forEach(s => rawList.push({ id: s.id, ...s.data() }));
 
+    // --- APLICAÇÃO DA REGRA DE NEGÓCIO (46 a 59 DIAS) ---
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    window.juridicoList = rawList.filter(item => {
+        // Se já estiver baixado/pago, não mostra (opcional, mas recomendado)
+        if (item.Status === 'Pago') return false;
+
+        // Se não tiver vencimento, mostra por segurança (ou oculte se preferir)
+        if (!item.Vencimento) return true;
+
+        const dataVenc = parseDateBR(item.Vencimento);
+        if (!dataVenc) return true; // Data inválida, mostra para corrigir
+
+        dataVenc.setHours(0, 0, 0, 0);
+        
+        // Cálculo de dias de atraso
+        const diffTime = hoje - dataVenc;
+        const diasAtraso = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        // Salva o cálculo no item para usar no visual depois
+        item.diasAtrasoCalculado = diasAtraso;
+
+        // REGRA: Entra no dia 46 (pós 1ª Jurídica) e sai no dia 60 (2ª Jurídica)
+        // Intervalo: [46, 59]
+        return diasAtraso >= 46 && diasAtraso < 60;
+    });
+
+    // Atualiza o contador da tela
     const totalEl = document.getElementById('total-juridico-count');
     if (totalEl) totalEl.textContent = window.juridicoList.length;
 
@@ -49,15 +78,23 @@ export function renderJuridicoList(data) {
   container.innerHTML = '';
 
   if (!data || data.length === 0) {
-    container.innerHTML = '<p class="empty-msg">Nenhum registro jurídico ativo.</p>';
+    container.innerHTML = '<p class="empty-msg">Nenhum aluno na fase de ligação (46-59 dias).</p>';
     return;
   }
 
-  data.forEach(item => {
+  const sortedData = data.sort((a, b) => (a.diasAtrasoCalculado || 0) - (b.diasAtrasoCalculado || 0));
+
+  sortedData.forEach(item => {
+    // ... (resto do código igual)
     const dataVenc = item.Vencimento || '-';
     const ligaCount = item.LigaEtapa || 0;
     const msgCount = item.TemplateEtapa || 0;
     const safeClass = (item.StatusExtra?.tipo || 'nenhum').replace(/_/g,'-').toLowerCase();
+    
+    // Badge de dias de atraso
+    const diasLabel = item.diasAtrasoCalculado 
+        ? `<span style="background:#ffebee; color:#c62828; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold; margin-left:5px;">${item.diasAtrasoCalculado} dias atraso</span>`
+        : '';
 
     const card = document.createElement('div');
     card.className = `cobranca-card juridico-card status-${safeClass}`;
@@ -66,6 +103,7 @@ export function renderJuridicoList(data) {
         <h3>${item.Nome || '-'}</h3>
         <p style="margin-top:10px;"><strong>Curso:</strong> ${item.Curso || '-'}</p>
         <p><strong>Valor Parcela:</strong> ${item.ValorParcela || '-'} | <strong>Total:</strong> ${item.TotalAberto || '-'}</p>
+        <p><strong>Vencimento:</strong> ${dataVenc} ${diasLabel}</p>
         <p style="margin-top:6px; font-size:12px; color:#555;">
           📞 ${ligaCount} | 💬 ${msgCount}
         </p>
@@ -110,6 +148,7 @@ export async function processImportJuridico() {
       if (cols.length < 9) return;
 
       const data1jur = parseDateBR(cols[8]) || null;
+      // Importante: Vencimento deve vir no formato DD/MM/AAAA para o cálculo funcionar
       const newItem = {
         Curso: cols[0] || '',
         Nome: cols[1] || '',
@@ -118,7 +157,7 @@ export async function processImportJuridico() {
         Telefone: cols[4] || '',
         ValorParcela: cols[5] || '',
         TotalAberto: cols[6] || '',
-        Vencimento: cols[7] || '',
+        Vencimento: cols[7] || '', // Usado para calcular os 46-59 dias
         Data1Jur: data1jur,
         LigaEtapa: 0,
         TemplateEtapa: 0,
@@ -132,8 +171,13 @@ export async function processImportJuridico() {
 
     await Promise.all(promises);
     closeImportModalJuridico();
-    alert(`${success} registros importados!`);
-    loadJuridicoLigacoes();
+    
+    // Pequeno delay para garantir que o Firestore salvou antes de recarregar
+    setTimeout(() => {
+        alert(`${success} registros importados!\n(Apenas os que tiverem entre 46-59 dias de atraso aparecerão na lista)`);
+        loadJuridicoLigacoes();
+    }, 500);
+    
   } catch (err) {
     console.error(err);
     alert('Erro ao importar.');
@@ -159,19 +203,23 @@ export function openActionsModalJuridico(id) {
     <p><strong>Total Aberto:</strong> ${item.TotalAberto || '-'}</p>
   `;
 
-  // status select
   const sel = document.getElementById('juridico-extra-status-select');
   if (sel) sel.value = item.StatusExtra?.tipo || '';
 
-  // propostas
-  const props = item.Propostas || {};
-  for (let i=1;i<=4;i++){
-    const el = document.getElementById(`jur-prop-${i}`) || document.getElementById(`jur-prop-${i}`);
+  if (item.Propostas) {
+      for (let i=1;i<=4;i++){
+        const el = document.getElementById(`jur-prop-${i}`);
+        if(el) el.value = item.Propostas[`p${i}`] || '';
+      }
+  } else {
+      for (let i=1;i<=4;i++){
+        const el = document.getElementById(`jur-prop-${i}`);
+        if(el) el.value = '';
+      }
   }
-  // update buttons text
+
   updateJuridicoStageButtons(item);
 
-  // show modal
   const overlay = document.getElementById('actions-modal-juridico');
   if (overlay) { overlay.classList.remove('modal-hidden'); overlay.style.display = 'flex'; }
 }
@@ -328,81 +376,72 @@ window.saveExtraStatusJuridico = saveExtraStatusJuridico;
 
 export async function registerPaymentJuridico() {
   if (!currentJuridicoActionId) return;
-  
   const dateVal = document.getElementById('juridico-payment-date')?.value;
   const origin = document.getElementById('juridico-payment-origin')?.value;
+  if (!dateVal || !origin) return alert('Preencha data e origem.');
 
-  // Validação mais suave
-  if (!dateVal || !origin) {
-      return Swal.fire('Atenção', 'Preencha a data e a origem do pagamento.', 'info');
-  }
-
-  // Confirmação
-  const result = await Swal.fire({
-      title: 'Confirmar Pagamento?',
-      text: "O registro será baixado como 'Pago'.",
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: '#28a745', // Verde
-      cancelButtonColor: '#6c757d',
-      confirmButtonText: 'Sim, confirmar!'
-  });
-
-  if (!result.isConfirmed) return;
-
+  if (!confirm('Confirmar pagamento?')) return;
   try {
-    Swal.fire({ title: 'Registrando...', didOpen: () => Swal.showLoading() });
-
     await updateDoc(doc(db, JURIDICO_COLLECTION, currentJuridicoActionId), {
       Status: 'Pago',
       DataPagamento: new Date(dateVal),
       OrigemPagamento: origin,
-      BaixadoPor: getCurrentEmail() // Usa a função auxiliar interna do arquivo
+      BaixadoPor: getCurrentEmail()
     });
-
-    // Fecha o modal antes de mostrar o sucesso para ficar mais limpo
+    alert('Pagamento registrado.');
     closeActionsModalJuridico();
-    
-    Swal.fire('Sucesso!', 'Pagamento jurídico registrado.', 'success');
-    
     loadJuridicoLigacoes();
   } catch (err) {
     console.error(err);
-    Swal.fire('Erro!', 'Falha ao registrar pagamento.', 'error');
+    alert('Erro ao registrar pagamento.');
   }
 }
 window.registerPaymentJuridico = registerPaymentJuridico;
 
 export async function archiveJuridico(id) {
-  // 1. Confirmação com SweetAlert2
-  const result = await Swal.fire({
-      title: 'Excluir registro?',
-      text: "Essa ação no jurídico é permanente!",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#dc3545', // Vermelho
-      cancelButtonColor: '#6c757d',
-      confirmButtonText: 'Sim, excluir!',
-      cancelButtonText: 'Cancelar'
-  });
+  // ATUALIZADO: Uso do SweetAlert se disponível, ou confirm padrão
+  const confirmAction = async () => {
+      if (typeof Swal !== 'undefined') {
+          const res = await Swal.fire({
+              title: 'Excluir?',
+              text: "Essa ação é irreversível.",
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonColor: '#d33',
+              confirmButtonText: 'Sim, excluir'
+          });
+          return res.isConfirmed;
+      }
+      return confirm('Remover registro permanentemente?');
+  };
 
-  if (!result.isConfirmed) return;
+  if (!(await confirmAction())) return;
 
   try {
-    // Loading enquanto processa
-    Swal.fire({ title: 'Excluindo...', didOpen: () => Swal.showLoading() });
-
     await deleteDoc(doc(db, JURIDICO_COLLECTION, id));
-    
-    // Sucesso
-    Swal.fire('Excluído!', 'Registro jurídico removido.', 'success');
-    
     loadJuridicoLigacoes();
+    if(typeof Swal !== 'undefined') Swal.fire('Excluído!', '', 'success');
   } catch (err) {
     console.error(err);
-    Swal.fire('Erro!', 'Não foi possível excluir.', 'error');
+    alert('Erro ao excluir.');
   }
 }
 window.archiveJuridico = archiveJuridico;
+
+// ==========================================
+// FILTRO DE BUSCA LOCAL (Barra de pesquisa)
+// ==========================================
+window.filterJuridicoList = function() {
+    const search = document.getElementById('juridico-ligacoes-search').value.toLowerCase();
+    
+    // Filtra sobre a lista JÁ FILTRADA por data (window.juridicoList)
+    const filtered = window.juridicoList.filter(item => 
+        (item.Nome || "").toLowerCase().includes(search) ||
+        (item.CPF || "").toLowerCase().includes(search) ||
+        (item.Email || "").toLowerCase().includes(search)
+    );
+    
+    renderJuridicoList(filtered);
+};
 
 console.log("--> juridico_ligacoes module loaded.");
