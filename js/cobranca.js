@@ -104,7 +104,7 @@ export function renderCobrancaList(data) {
   container.innerHTML = '';
 
   if (!data || data.length === 0) {
-    container.innerHTML = '<p class="empty-msg">Nenhum aluno na fase de 3ª Cobrança.</p>';
+    container.innerHTML = '<p class="empty-msg">Nenhum aluno na fase de 3ª Cobrança!</p>';
     return;
   }
 
