@@ -1,6 +1,4 @@
 // js/cobranca.js
-console.log("--> Carregando módulo cobrança...");
-
 import { db, auth } from './firebase.js'; 
 import {
   collection, getDocs, query, orderBy, addDoc,
@@ -63,7 +61,7 @@ export async function loadCobrancaData() {
 
         // REGRA: Mostrar apenas entre 31 e 45 dias
         // (Antes de 31 é Cobrança Inicial, depois de 45 vira Jurídico)
-        return diasAtraso >= 31 && diasAtraso <= 45;
+        return diasAtraso >= 31 && diasAtraso <  45;
     });
 
     // Atualiza contador KPI
@@ -465,18 +463,18 @@ window.registerPayment = async function() {
   const originVal = document.getElementById('payment-origin')?.value;
   const userEmail = getCurrentUserEmail();
 
-  // 1. Validação Visual (SweetAlert)
+  // 1. Validação Visual
   if (!dateVal || !originVal) {
       return Swal.fire('Campos Obrigatórios', 'Preencha a data e a origem do pagamento.', 'warning');
   }
 
-  // 2. Confirmação Bonita
+  // 2. Confirmação
   const result = await Swal.fire({
       title: 'Confirmar Baixa?',
       text: "O status mudará para 'Pago' e o aluno sairá desta lista.",
       icon: 'question',
       showCancelButton: true,
-      confirmButtonColor: '#28a745', // Verde
+      confirmButtonColor: '#28a745',
       cancelButtonColor: '#6c757d',
       confirmButtonText: 'Sim, confirmar!',
       cancelButtonText: 'Cancelar'
@@ -488,14 +486,21 @@ window.registerPayment = async function() {
     // 3. Loading
     Swal.fire({ title: 'Processando...', didOpen: () => Swal.showLoading() });
 
+    // --- CORREÇÃO DE DATA AQUI ---
+    // Pega "2025-12-18" e divide em partes
+    const [ano, mes, dia] = dateVal.split('-').map(Number);
+    
+    // Cria a data usando o horário do navegador (Local) e define para meio-dia (12h)
+    // Isso evita que fusos horários joguem a data para o dia anterior
+    const dataCorreta = new Date(ano, mes - 1, dia, 12, 0, 0);
+
     await updateDoc(doc(db, COBRANCA_COLLECTION, currentActionStudentId), {
       Status: 'Pago',
-      DataPagamento: new Date(dateVal),
+      DataPagamento: dataCorreta, // Usa a data ajustada
       OrigemPagamento: originVal,
       BaixadoPor: userEmail
     });
     
-    // Fecha o modal de detalhes para limpar a tela
     closeActionsModal();
 
     // 4. Sucesso
@@ -670,8 +675,6 @@ function renderPaymentsTable(list) {
 // Expor globalmente para o HTML acessar
 window.loadPaymentsList = loadPaymentsList;
 
-console.log("--> Módulo cobrança carregado com sucesso!");
-
 // -------------------------
 // 10. EXPORTAR PAGAMENTOS (EXCEL)
 // -------------------------
@@ -765,4 +768,104 @@ window.exportPaymentsExcel = async function() {
         console.error("Erro export:", err);
         alert("Erro ao exportar pagamentos.");
     }
+};
+
+// =========================================================
+// 10. EXPORTAR ALUNOS PENDENTES (Sem Tag E Sem Ligação Recente)
+// =========================================================
+window.exportNoAnswerStudents = function() {
+    // 1. Pergunta o intervalo
+    const horasInput = prompt("Exportar alunos SEM TAG e que NÃO receberam ligação nas últimas X horas:", "3");
+    if (horasInput === null) return; 
+
+    const horas = parseFloat(horasInput.replace(',', '.'));
+    if (isNaN(horas) || horas < 0) return alert("Digite um número válido.");
+
+    const agora = new Date();
+    // Define o corte: Tudo antes de (Agora - 3h) é considerado "antigo"
+    const tempoCorte = new Date(agora.getTime() - (horas * 60 * 60 * 1000));
+
+    // 2. Filtra a lista
+    const listaParaExportar = window.cobrancaList.filter(aluno => {
+        
+        // CONDICÃO A: NÃO PODE TER TAG (Status Extra)
+        // Se tiver tag (Acordo, Recado, etc), ele já foi tratado -> SAI DA LISTA
+        const temTag = aluno.StatusExtra && aluno.StatusExtra.tipo && aluno.StatusExtra.tipo !== "";
+        if (temTag) return false; 
+
+        // CONDICÃO B: NÃO PODE TER LOG RECENTE
+        const logs = aluno.HistoricoLogs || [];
+        
+        // Verifica se existe ALGUM log de 'ligacao' feito DEPOIS do tempo de corte
+        const teveLigacaoRecente = logs.some(log => {
+            if (log.tipo !== 'ligacao') return false;
+            const dataLog = new Date(log.timestamp); 
+            return dataLog > tempoCorte; // Retorna TRUE se for recente (ex: 1h atrás)
+        });
+
+        // Se teve ligação recente -> SAI DA LISTA (já mexeram nele)
+        if (teveLigacaoRecente) return false;
+
+        // Se chegou aqui: Não tem Tag E Não tem Ligação Recente -> ENTRA NA LISTA
+        return true;
+    });
+
+    if (listaParaExportar.length === 0) {
+        return alert(`Nenhum aluno pendente encontrado (Sem tag e sem ligação nas últimas ${horas}h).`);
+    }
+
+    // 3. Confirmação
+    if(!confirm(`Encontrei ${listaParaExportar.length} alunos que não foram trabalhados nas últimas ${horas}h e estão sem tag.\nBaixar Excel?`)) return;
+
+    // 4. Gera Excel
+    let table = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="UTF-8"></head>
+        <body>
+        <table border="1">
+            <thead>
+                <tr style="background-color: #ff9800; color: white;"> <th>NOME</th>
+                    <th>TELEFONE</th>
+                    <th>E-MAIL</th>
+                    <th>VALOR</th>
+                    <th>VENCIMENTO</th>
+                    <th>DIAS ATRASO</th>
+                    <th>ÚLTIMA AÇÃO (ANTIGA)</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    listaParaExportar.forEach(item => {
+        let ultimaAcaoStr = 'Nunca';
+        if (item.UltimaAcao) {
+            const d = item.UltimaAcao.toDate ? item.UltimaAcao.toDate() : new Date(item.UltimaAcao);
+            ultimaAcaoStr = d.toLocaleString('pt-BR');
+        }
+
+        table += `
+            <tr>
+                <td>${item.Nome || '-'}</td>
+                <td style="mso-number-format:'@'">${item.Telefone || '-'}</td>
+                <td>${item.Email || '-'}</td>
+                <td>${item.Valor || '-'}</td>
+                <td>${item.Vencimento || '-'}</td>
+                <td>${item.diasAtrasoCalculado || '-'}</td>
+                <td>${ultimaAcaoStr}</td>
+            </tr>
+        `;
+    });
+
+    table += `</tbody></table></body></html>`;
+
+    const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    // Nome sugestivo: Pendentes_3h.xls
+    const nomeArquivo = `Pendentes_${horas}h_${agora.getHours()}h${agora.getMinutes()}.xls`;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 };
