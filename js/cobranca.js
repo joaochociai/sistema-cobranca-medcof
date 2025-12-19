@@ -2,7 +2,7 @@
 import { db, auth } from './firebase.js'; 
 import {
   collection, getDocs, query, orderBy, addDoc,
-  updateDoc, doc, arrayUnion, deleteDoc, where 
+  updateDoc, doc, arrayUnion, deleteDoc, where, deleteField 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import { formatDateUTC, parseDateBR, mapStatusToLabel } from './utils.js';
@@ -33,10 +33,44 @@ export async function loadCobrancaData() {
 
     const rawList = [];
     const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+    hoje.setHours(0, 0, 0, 0); // Zera hora para cálculo de dias
 
+    // Loop inicial para processar dados e checar Tags
     querySnapshot.forEach((docSnap) => {
-        rawList.push({ id: docSnap.id, ...docSnap.data() });
+        let aluno = { id: docSnap.id, ...docSnap.data() };
+
+        // ============================================================
+        // ⏰ "FAXINEIRO": VERIFICA SE A TAG EXPIROU (3 DIAS)
+        // ============================================================
+        // Normaliza o nome da tag para verificar
+        const tagAtual = aluno.StatusExtra?.tipo || aluno.StatusExtra;
+
+        // LISTA DE EXCEÇÕES: Tags que NUNCA expiram
+        const tagsPermanentes = ['Link agendado', 'Jurídica'];
+
+        // Só entra na verificação se tiver tag, tiver data E NÃO FOR PERMANENTE
+        if (tagAtual && aluno.DataTag && !tagsPermanentes.includes(tagAtual)) {
+            
+            const dataTag = aluno.DataTag.toDate ? aluno.DataTag.toDate() : new Date(aluno.DataTag);
+            const diffTempo = new Date() - dataTag;
+            const diasPassados = diffTempo / (1000 * 60 * 60 * 24);
+
+            if (diasPassados >= 3) {
+                console.log(`Tag expirada: ${tagAtual} para ${aluno.Nome}. Limpando...`);
+
+                aluno.StatusExtra = null;
+                aluno.DataTag = null;
+
+                const docRef = doc(db, COBRANCA_COLLECTION, aluno.id);
+                updateDoc(docRef, {
+                    StatusExtra: deleteField(),
+                    DataTag: deleteField()
+                }).catch(err => console.error("Erro ao remover tag:", err));
+            }
+        }
+        // ============================================================
+
+        rawList.push(aluno);
     });
 
     // --- FILTRO: JANELA DE 31 A 45 DIAS ---
@@ -44,12 +78,12 @@ export async function loadCobrancaData() {
         // 1. Se já pagou, remove
         if (aluno.Status === 'Pago') return false;
 
-        // 2. Se não tem vencimento, mostra por segurança (ou oculte se preferir)
+        // 2. Se não tem vencimento, mostra por segurança
         if (!aluno.Vencimento) return true;
 
-        // 3. Cálculo de dias
-        const dataVenc = parseDateBR(aluno.Vencimento);
-        if (!dataVenc) return true; // Data inválida, mostra para corrigir
+        // 3. Cálculo de dias de atraso
+        const dataVenc = parseDateBR(aluno.Vencimento); // Certifique-se que essa função existe
+        if (!dataVenc) return true; 
         
         dataVenc.setHours(0, 0, 0, 0);
         
@@ -59,9 +93,8 @@ export async function loadCobrancaData() {
         // Salva para exibir no card
         aluno.diasAtrasoCalculado = diasAtraso;
 
-        // REGRA: Mostrar apenas entre 31 e 45 dias
-        // (Antes de 31 é Cobrança Inicial, depois de 45 vira Jurídico)
-        return diasAtraso >= 31 && diasAtraso <  45;
+        // REGRA: Mostrar apenas entre 31 e 45 dias (Jurídico é >= 45)
+        return diasAtraso >= 31 && diasAtraso < 45;
     });
 
     // Atualiza contador KPI
@@ -114,13 +147,68 @@ export function renderCobrancaList(data) {
           ? `<span style="background:#fff3cd; color:#856404; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold; margin-left:5px;">${aluno.diasAtrasoCalculado} dias</span>`
           : '';
       
-      const dataLimite = aluno.Data1Jur ? formatDateUTC(aluno.Data1Jur) : 'N/A';
-      const statusTipo = aluno.StatusExtra?.tipo || "nenhum";
-      const safeClass = String(statusTipo).replace(/_/g, '-').replace(/\s+/g, '-').toLowerCase();
-      const statusLabelHtml = aluno.StatusExtra?.tipo
-        ? `<p class="extra-status">${mapStatusToLabel(aluno.StatusExtra.tipo)}</p>`
+      const dataLimite = aluno.Data1Jur ? (typeof formatDateUTC === 'function' ? formatDateUTC(aluno.Data1Jur) : aluno.Data1Jur) : 'N/A';
+
+      // -----------------------------------------------------------
+      // LÓGICA DO CRONÔMETRO (COM DIAGNÓSTICO)
+      // -----------------------------------------------------------
+      const tagNome = aluno.StatusExtra?.tipo || aluno.StatusExtra || null;
+      const safeClass = String(tagNome || "nenhum").replace(/_/g, '-').replace(/\s+/g, '-').toLowerCase();
+
+      let timeLabelHtml = '';
+
+      // LISTA DE EXCEÇÕES VISUAIS
+      const tagsPermanentes = ['Link agendado', 'Jurídica'];
+
+      // Só calcula o tempo se NÃO for uma tag permanente
+      if (tagNome && aluno.DataTag && !tagsPermanentes.includes(tagNome)) {
+          const dataTag = aluno.DataTag.toDate ? aluno.DataTag.toDate() : new Date(aluno.DataTag);
+          const agora = new Date();
+          
+          const diffDias = (agora - dataTag) / (1000 * 60 * 60 * 24);
+          const diasRestantes = 3 - diffDias;
+
+          let textoTempo = '';
+          if (diasRestantes < 0) {
+            textoTempo = '(expirando...)';
+          } else if (diasRestantes < 1) {
+            const horas = Math.ceil(diasRestantes * 24);
+            textoTempo = `(${horas}h rest.)`;
+          } else {
+            textoTempo = `(${Math.ceil(diasRestantes)}d rest.)`;
+          }
+
+          timeLabelHtml = `<span style="font-size:0.85em; opacity:1; margin-left:6px; color:#333; font-weight:bold;">${textoTempo}</span>`;
+      }
+      // -------------------
+
+      if (tagNome && aluno.DataTag) {
+          const dataTag = aluno.DataTag.toDate ? aluno.DataTag.toDate() : new Date(aluno.DataTag);
+          const agora = new Date();
+          
+          const diffDias = (agora - dataTag) / (1000 * 60 * 60 * 24);
+          const diasRestantes = 3 - diffDias;
+
+          let textoTempo = '';
+          if (diasRestantes < 0) {
+             textoTempo = '(expirando...)';
+          } else if (diasRestantes < 1) {
+             const horas = Math.ceil(diasRestantes * 24);
+             textoTempo = `(${horas}h rest.)`;
+          } else {
+             textoTempo = `(${Math.ceil(diasRestantes)}d rest.)`;
+          }
+
+          // Forcei uma cor preta aqui para garantir que não esteja invisível
+          timeLabelHtml = `<span style="font-size:0.85em; opacity:1; margin-left:6px; color:#333; font-weight:bold;">${textoTempo}</span>`;
+      }
+
+      const labelTag = typeof mapStatusToLabel === 'function' ? mapStatusToLabel(tagNome) : tagNome;
+
+      const statusLabelHtml = tagNome
+        ? `<p class="extra-status">${labelTag} ${timeLabelHtml}</p>`
         : '';
-  
+
       const ligaCount = aluno.LigaEtapa || 0;
       const msgCount = aluno.TemplateEtapa || 0;
   
@@ -133,7 +221,7 @@ export function renderCobrancaList(data) {
           <p style="margin-top:10px;"><strong>Curso:</strong> ${aluno.Curso || '-'}</p>
           <p><strong>Valor:</strong> ${aluno.Valor || '-'} | <strong>Venc:</strong> ${aluno.Vencimento || '-'} ${diasLabel}</p>
           <p style="margin-top:5px; font-size:12px; color:#555;">
-             📞 Ligações: <strong>${ligaCount}</strong> | 💬 Templates: <strong>${msgCount}</strong>
+              📞 Ligações: <strong>${ligaCount}</strong> | 💬 Templates: <strong>${msgCount}</strong>
           </p>
           <p class="limit-date">⚠️ Jurídico em: ${dataLimite}</p>
           ${statusLabelHtml}
@@ -245,7 +333,7 @@ export function openActionsModal(docId) {
 
   currentActionStudentId = docId;
   
-  // Dados básicos
+  // 1. Preenche Dados básicos
   document.getElementById('actions-student-name').textContent = aluno.Nome;
   document.getElementById('actions-student-details').innerHTML = `
     <p><strong>Email:</strong> ${aluno.Email || '-'}</p>
@@ -254,31 +342,43 @@ export function openActionsModal(docId) {
     <p><strong>Valor:</strong> ${aluno.Valor || '-'} (${aluno.FormaPag || '-'})</p>
   `;
 
-  // Status
+  // 2. Preenche o Select com o Status Atual
+  // Tenta pegar o valor de diferentes formatos (string antiga ou objeto novo)
+  const tagAtual = aluno.StatusExtra?.tipo || aluno.StatusExtra || '';
+  
   const select = document.getElementById("extra-status-select");
-  if (select) select.value = aluno.StatusExtra?.tipo || '';
+  if (select) select.value = tagAtual;
 
-  // Propostas
+  // 3. Preenche Propostas
   const props = aluno.Propostas || {};
   for(let i=1; i<=4; i++) {
       const el = document.getElementById(`prop-${i}`);
       if(el) el.value = props[`p${i}`] || '';
   }
 
-  updateStageButtons(aluno);
-
-  // Header Color
-  const modalHeader = document.querySelector('.actions-header');
-  if (modalHeader) {
-    modalHeader.className = 'actions-header';
-    const statusExtra = aluno.StatusExtra?.tipo || '';
-    if (statusExtra) {
-      const safeClass = statusExtra.replace(/_/g, '-').replace(/\s+/g, '-').toLowerCase();
-      modalHeader.classList.add(`header-status-${safeClass}`);
-    }
+  // 4. Atualiza botões de etapa (se houver essa função)
+  if (typeof updateStageButtons === 'function') {
+      updateStageButtons(aluno);
   }
 
-  // Show
+  // 5. Atualiza a cor do cabeçalho do Modal (Visual)
+  const modalHeader = document.querySelector('.actions-header');
+  if (modalHeader) {
+      modalHeader.className = 'actions-header'; // Reseta classes para o padrão
+      
+      if(tagAtual) {
+          // --- CORREÇÃO AQUI ---
+          // Usamos a variável 'tagAtual' (que vem do aluno) e não 'value'
+          const safe = String(tagAtual).replace(/[\s_]+/g, '-').toLowerCase();
+          
+          // Gera classe ex: header-status-link-agendado
+          modalHeader.classList.add(`header-status-${safe}`);
+      }
+  }
+
+  // (Removido o window.showToast daqui, pois só deve aparecer ao salvar, não ao abrir)
+
+  // 6. Exibe o Modal
   const overlay = document.getElementById('actions-modal-overlay');
   if (overlay) {
     overlay.classList.remove('modal-hidden');
@@ -428,32 +528,67 @@ window.saveProposal = async function(index) {
 // -------------------------
 window.saveExtraStatus = async function () {
   if (!currentActionStudentId) return;
+  
   const sel = document.getElementById('extra-status-select');
   const value = sel ? sel.value : '';
   const userEmail = getCurrentUserEmail();
+  const docRef = doc(db, COBRANCA_COLLECTION, currentActionStudentId);
 
   try {
-    await updateDoc(doc(db, COBRANCA_COLLECTION, currentActionStudentId), {
-      StatusExtra: { tipo: value, atualizadoEm: new Date(), por: userEmail },
-      UltimoResponsavel: userEmail
-    });
+    // 1. Salva ou Remove no Banco
+    if (value) {
+        await updateDoc(docRef, {
+          StatusExtra: { tipo: value, atualizadoEm: new Date(), por: userEmail },
+          UltimoResponsavel: userEmail,
+          DataTag: new Date() // Salva data para o cronômetro
+        });
+    } else {
+        await updateDoc(docRef, {
+          StatusExtra: deleteField(),
+          DataTag: deleteField(),
+          UltimoResponsavel: userEmail
+        });
+    }
     
+    // 2. Atualiza a lista local e a tela
     const idx = window.cobrancaList.findIndex(a => a.id === currentActionStudentId);
+    
     if (idx > -1) {
-      window.cobrancaList[idx].StatusExtra = { tipo: value };
+      // Atualiza memória
+      if (value) {
+          window.cobrancaList[idx].StatusExtra = { tipo: value };
+          window.cobrancaList[idx].DataTag = new Date();
+      } else {
+          delete window.cobrancaList[idx].StatusExtra;
+          delete window.cobrancaList[idx].DataTag;
+      }
+      
+      // Atualiza a lista atrás do modal
       renderCobrancaList(window.cobrancaList);
       
+      // --- CORREÇÃO DO ERRO AQUI ---
+      // Atualiza a cor do cabeçalho do Modal Aberto
       const modalHeader = document.querySelector('.actions-header');
-      modalHeader.className = 'actions-header';
-      if(value) {
-          const safe = value.replace(/_/g, '-').toLowerCase();
-          modalHeader.classList.add(`header-status-${safe}`);
+      if (modalHeader) {
+          modalHeader.className = 'actions-header'; // Reseta classes
+          
+          if(value) {
+              // Troca ESPAÇOS (\s) e UNDERLINES (_) por hífen (-)
+              // Ex: "Link enviado" vira "link-enviado"
+              const safe = value.replace(/[\s_]+/g, '-').toLowerCase();
+              
+              // Adiciona classe válida: header-status-link-enviado
+              modalHeader.classList.add(`header-status-${safe}`);
+          }
       }
     }
 
-    window.showToast("Status atualizado!");
+    window.showToast(value ? "Status atualizado!" : "Status removido!");
 
-  } catch (error) { console.error(error); }
+  } catch (error) { 
+      console.error(error); 
+      window.showToast("Erro ao atualizar.", "error");
+  }
 };
 
 window.registerPayment = async function() {
@@ -513,6 +648,22 @@ window.registerPayment = async function() {
   }
 };
 
+async function setExtraTag(studentId, tagName) {
+    try {
+        const docRef = doc(db, COBRANCA_COLLECTION, studentId);
+        
+        await updateDoc(docRef, {
+            StatusExtra: tagName, // A tag (ex: "Promessa Pagamento")
+            DataTag: new Date()   // <--- O PULO DO GATO: Salva o momento exato
+        });
+
+        if(window.showToast) window.showToast("Tag aplicada!", "success");
+        loadCobrancaData(); // Recarrega a tela
+    } catch (e) {
+        console.error(e);
+    }
+}
+
 window.archiveStudent = async function(docId) {
   // 1. Substituindo o confirm nativo pelo SweetAlert2
   const result = await Swal.fire({
@@ -553,33 +704,69 @@ window.archiveStudent = async function(docId) {
 // 8. EXPORTAR ATIVOS (SEM STATUS EXTRA)
 // -------------------------
 window.exportActiveCobranca = function() {
+    // 1. Verificações de segurança (Mantido da antiga)
     if (!window.cobrancaList || window.cobrancaList.length === 0) {
-        return alert("Não há dados carregados para exportar.");
+        if(window.showToast) window.showToast("Não há dados carregados para exportar.", "warning");
+        else alert("Não há dados carregados.");
+        return;
     }
 
+    // 2. Filtro (Mantido da antiga: Pega apenas quem NÃO tem StatusExtra)
     const dataToExport = window.cobrancaList.filter(aluno => {
         const temStatus = aluno.StatusExtra && aluno.StatusExtra.tipo && aluno.StatusExtra.tipo !== "";
         return !temStatus; 
     });
 
     if (dataToExport.length === 0) {
-        return alert("Nenhum aluno ativo 'sem status' encontrado para exportação.");
+        if(window.showToast) window.showToast("Nenhum contato sem tag encontrado.", "info");
+        else alert("Nenhum contato encontrado.");
+        return;
     }
 
-    let csvContent = "Telefone;Nome;Email;Valor\n";
+    // 3. Cabeçalho novo solicitado (Separado por vírgula)
+    let csvContent = "number,info_1,info_2,info_3\n";
 
     dataToExport.forEach(row => {
-        const clean = (txt) => (txt ? String(txt).replace(/;/g, " ") : "");
-        csvContent += `${clean(row.Telefone)};${clean(row.Nome)};${clean(row.Email)};${clean(row.Valor)}\n`;
+        // --- LÓGICA DE TRATAMENTO DO TELEFONE (NOVA) ---
+        let phone = (row.Telefone || "").toString().replace(/\D/g, ""); // Remove tudo que não é número
+
+        // A. Remove o 55 do início se o número for longo (maior que 11 dígitos, ex: 55419...)
+        if (phone.startsWith("55") && phone.length > 11) {
+            phone = phone.substring(2);
+        }
+
+        // B. Verifica se precisa do 9º dígito
+        // Se após limpar ficou com 10 dígitos (Ex: 41 8888 7777), insere o 9 na 3ª posição
+        if (phone.length === 10) {
+            const ddd = phone.substring(0, 2);
+            const numero = phone.substring(2);
+            phone = `${ddd}9${numero}`;
+        }
+        // -----------------------------------------------
+
+        // Função auxiliar para limpar vírgulas dos textos (pois a vírgula agora é separador)
+        const clean = (txt) => (txt ? String(txt).replace(/,/g, " ") : "");
+
+        // Mapeamento das colunas
+        const number = phone;
+        const info1  = clean(row.Nome);             // info_1: Nome
+        const info2  = clean(row.Email || "");      // info_2: Email
+        const info3  = clean(row.Curso || "");      // info_3: Curso
+
+        // Monta a linha
+        csvContent += `${number},${info1},${info2},${info3}\n`;
     });
 
+    // 4. Download do Arquivo (Mantido o BOM \ufeff para o Excel ler acentos corretamente)
     const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     
     const hoje = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+    
     link.setAttribute("href", url);
-    link.setAttribute("download", `Alunos_Ativos_SemStatus_${hoje}.csv`);
+    // Nome do arquivo atualizado para identificar que é mailing
+    link.setAttribute("download", `Mailing_Cobranca_${hoje}.csv`);
     
     document.body.appendChild(link);
     link.click();
@@ -868,4 +1055,67 @@ window.exportNoAnswerStudents = function() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+};
+
+// Função para levar dados da Cobrança para a Agenda
+window.bridgeToAgenda = function() {
+    // 1. Segurança: Verifica se tem aluno selecionado
+    if (!currentActionStudentId) return;
+
+    const aluno = window.cobrancaList.find(a => a.id === currentActionStudentId);
+    if (!aluno) return;
+
+    // 2. Fecha o Modal de Ações e o Overlay (Cobrança)
+    // Ajuste os IDs se o seu modal de ações tiver outro nome
+    const actionsOverlay = document.getElementById('actions-modal-overlay');
+    const actionsModal = document.getElementById('actions-modal'); // ou o ID do container do modal
+    
+    if (actionsOverlay) {
+        actionsOverlay.classList.add('modal-hidden');
+        actionsOverlay.style.display = 'none';
+    }
+    if (actionsModal) {
+        actionsModal.classList.remove('active');
+    }
+
+    // 3. Troca de Aba (Esconde as outras e mostra a de Agendamento)
+    // Primeiro, tenta clicar no botão da sidebar se existir (para manter o visual ativo)
+    const tabBtn = document.querySelector('button[onclick*="tab-agendamento"]') || 
+                   document.querySelector('[data-target="tab-agendamento"]');
+    
+    if (tabBtn) {
+        tabBtn.click();
+    } else {
+        // Fallback: Força a troca de classe manualmente se não achar o botão
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+        const tabTarget = document.getElementById('tab-agendamento');
+        if (tabTarget) tabTarget.classList.remove('hidden');
+    }
+
+    // 4. Preenche o Formulário (#link-schedule-form)
+    const form = document.getElementById('link-schedule-form');
+    if (form) {
+        // Preenche Nome
+        const inpNome = form.querySelector('[name="Nome"]');
+        if (inpNome) inpNome.value = aluno.Nome || '';
+
+        // Preenche Email
+        const inpEmail = form.querySelector('[name="Email"]');
+        if (inpEmail) inpEmail.value = aluno.Email || '';
+
+        // Preenche Curso
+        const inpCurso = form.querySelector('[name="Curso"]');
+        if (inpCurso) inpCurso.value = aluno.Curso || '';
+
+        // Preenche Telefone
+        const inpTel = form.querySelector('[name="Telefone"]');
+        if (inpTel) inpTel.value = aluno.Telefone || '';
+        
+        // Foca no campo de Motivo para o operador selecionar
+        const inpMotivo = form.querySelector('[name="Motivo"]');
+        if (inpMotivo) inpMotivo.focus();
+    }
+
+    // 5. Feedback
+    if(window.showToast) window.showToast("Dados do aluno importados!", "success");
 };
