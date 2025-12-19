@@ -34,18 +34,20 @@
     <div id="app-content" style="display: none;">
         
         <div id="sidebar-menu">
-            <img src="logo.png" alt="Logo da Empresa" id="sidebar-logo">
-            
-            <div id="nav-menu">
+            <div class="sidebar-header">
+                <img src="logo.png" alt="Logo da Empresa" id="sidebar-logo">
+            </div>  
+              
+            <div id="nav-menu" class="sidebar-content">
                 <button id="btn-home" class="nav-tab" onclick="window.showTab('tab-home', this)">🏠 Início</button>
-
-                <button id="btn-dashboard" class="nav-tab admin-only" onclick="window.showTab('tab-dashboard', this)" style="background-color: #343a40; color: #ffc107;">📊 Dashboard</button>
-                
-                <button id="btn-dash-juridico" class="nav-tab admin-only" onclick="window.showTab('tab-dash-juridico', this)" style="background-color: #0d47a1; color: white;">⚖️ Dash Jurídico</button>
 
                 <div class="sector-group" data-sector="cobranca">
                     <button class="nav-tab sector-btn" data-sector="cobranca" onclick="showTab('tab-escala', this)">📅 Escala Mensal</button>
                 </div>
+
+                <button id="btn-dashboard" class="nav-tab admin-only" onclick="window.showTab('tab-dashboard', this)">📊 Dashboard Cob.</button>
+                
+                <button id="btn-dash-juridico" class="nav-tab admin-only" onclick="window.showTab('tab-dash-juridico', this)">⚖️ Dashboard Jur.</button>
 
                 <div class="menu-group sector-group" data-sector="cobranca">
                     <div class="sector-title">COBRANÇA</div>
@@ -88,9 +90,9 @@
                         <button id="btn-juridico-ligacoes" class="nav-tab sector-btn" data-sector="juridico" onclick="window.showTab('tab-juridico-ligacoes', this)">1° Jurídica</button>
                     </div>
                 </div>
-                
+            </div>
 
-
+            <div class="sidebar-footer">  
                 <button class="nav-tab logout-btn" onclick="window.logoutSystem()">🔒 Sair</button>
             </div>
         </div>
@@ -377,9 +379,10 @@
                     <div class="search-box">
                         <input type="text" id="cobranca-search" placeholder="🔍 Buscar aluno..." onkeyup="window.filterCobranca()">
                     </div>
-                    <button class="import-btn admin-only" onclick="window.openImportModal()">📥 Importar</button>
-                    <button class="action-btn secondary admin-only" onclick="window.exportActiveCobranca()" style="margin-right: 10px;">📤 Exportar Ativos</button>
-                    <button class="action-btn admin-only" onclick="window.openPaymentsModal()" style="background-color: #198754; color: white; border-color: #198754; margin-right: 10px;">💲 Pagamentos</button>
+                    <button class="import-btn admin-only" onclick="window.openImportModal()">📥 Imp.</button>
+                    <button class="action-btn secondary admin-only" onclick="window.exportActiveCobranca()" >📤 Lig.</button>
+                    <button class="action-btn secondary" onclick="window.exportNoAnswerStudents()" >📵 Temp.</button>
+                    <button class="action-btn admin-only" onclick="window.openPaymentsModal()" style="background-color: #198754; color: white; border-color: #198754; margin-right: 10px;">💲 Pags.</button>
                 </div>
                 <div id="cobranca-list" class="cards-container"></div>
             </div>
@@ -588,17 +591,10 @@
                     <div class="escala-wrapper">
 
                         <aside class="escala-sidebar">
-                            <div class="sidebar-header">
+                            <div class="card equipe-card">
                                 <h3>👥 Equipe</h3>
-                                <p class="instruction-text">Arraste os nomes para a tabela</p>
+                                <div id="employees-list" style="max-height: 400px; overflow-y: auto; margin-top: 10px;"></div>
                             </div>
-
-                            <div class="add-employee-box admin-only">
-                                <input type="text" id="new-employee-name" placeholder="Novo nome..." autocomplete="off">
-                                <button onclick="window.addEmployeeToBank()">+</button>
-                            </div>
-
-                            <div id="employees-list" class="employees-container"></div>
                         </aside>
 
                         <div class="escala-main-area">
@@ -608,11 +604,10 @@
                                 <button id="next-month" onclick="window.changeEscalaMonth(1)">▶</button>
 
                                 <div class="separator"></div>
-
-                                <button id="btn-fill-standard" class="action-btn standard-btn" onclick="window.fillStandardSchedule()">✨ Preencher Padrão</button>
-                                        
-                                <button id="btn-create-dup" class="action-btn" onclick="window.createOrDuplicateEscala()">Criar / Duplicar</button>
-                                <button id="btn-export-excel" class="action-btn secondary" onclick="window.exportEscalaExcel()">📊 Exportar Excel</button>
+                                <button onclick="window.openHolidayConfigurator()" style="background-color: #9b59b6; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">📅 Feriados</button>
+                                <button onclick="window.openVacationConfigurator()" style="background-color: #e67e22; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">🏖️ Marcar Férias</button>
+                                <button onclick="window.openCycleConfigurator()" style="background-color: #5dade2; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">⚙️ Configurar Ciclos</button>        
+                                <button onclick="window.autoFillCycle()" style="background-color: #27ae60; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">✨ Auto Ciclo (Geral)</button>
                             </div>
 
                             <div id="escala-message" style="margin: 10px 0; font-weight: bold; min-height: 20px;"></div>
@@ -626,8 +621,9 @@
 
                 <!-- VISUALIZAÇÃO (somente leitura) -->
                 <div id="escala-view-container">
-                    <p style="margin-top: 20px;">Carregando escala...</p>
+                    <div id="escala-view-content"></div> 
                 </div>
+                <div id="escala-editor-wrapper" style="display:none;"></div>
             </div>
         </div>
     </div>
@@ -661,11 +657,12 @@
                 <div class="actions-col-main">
                     <div id="actions-student-details" class="details-panel"></div>
                     <label><strong>Status Extra:</strong></label>
-                    <select id="extra-status-select" onchange="window.saveExtraStatus()">
-                        <option value="">Nenhum</option>
-                        <option value="link_enviado">Link enviado</option>
-                        <option value="link_agendado">Link agendado</option>
-                        <option value="em_negociacao">Em negociação</option>
+                    <select id="extra-status-select" class="swal2-input" onchange="window.saveExtraStatus()">
+                        <option value="">-- Remover Status --</option>
+                        <option value="Link enviado">Link enviado</option>
+                        <option value="Link agendado">Link Agendado</option>
+                        <option value="Em negociação">Em negociação</option>
+                        <option value="Jurídica">Jurídica</option>
                     </select>
                     <div class="sequence-panel">
                         <div style="display: flex; gap: 10px; width: 100%;">
@@ -692,6 +689,9 @@
                             <button class="save-payment-btn" onclick="window.registerPayment()">Baixar</button>
                         </div>
                     </div>
+                    <button onclick="window.bridgeToAgenda()" class="btn-schedule" style="background-color: #8e44ad; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; display:flex; align-items:center; gap:5px;">
+                        📅 Agendar Link Futuro
+                    </button>
                 </div>
                 <div class="actions-col-proposals">
                     <h3>Propostas</h3>
@@ -794,5 +794,4 @@
 
     <script type="module" src="js/app.js"></script>
 </body>
-
 </html>
