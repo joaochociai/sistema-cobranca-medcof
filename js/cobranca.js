@@ -28,7 +28,7 @@ export async function loadCobrancaData() {
   if (container) container.innerHTML = '<div class="loader"></div>';
 
   try {
-    const q = query(collection(db, COBRANCA_COLLECTION), orderBy("createdAt", "desc"));
+    const q = query(collection(db, COBRANCA_COLLECTION), where("Status", "!=", "Pago"), orderBy("Status"), orderBy("createdAt", "desc"));
     const querySnapshot = await getDocs(q);
 
     const rawList = [];
@@ -197,9 +197,17 @@ export function renderCobrancaList(data) {
       
       const dataLimite = aluno.Data1Jur ? (typeof formatDateUTC === 'function' ? formatDateUTC(aluno.Data1Jur) : aluno.Data1Jur) : 'N/A';
 
+      // Função auxiliar para normalizar classes CSS (remover acentos e espaços)
+      const normalizeCSSClass = (text) => {
+          return String(text || "nenhum")
+              .normalize("NFD") // Decompõe caracteres acentuados
+              .replace(/[\u0300-\u036f]/g, "") // Remove os acentos
+              .replace(/[\s_]+/g, '-') // Substitui espaços e underscores por hífens
+              .toLowerCase();
+      };
+
       // Lógica do cronômetro (mantida exatamente como a sua)
       const tagNome = aluno.StatusExtra?.tipo || aluno.StatusExtra || null;
-      const safeClass = String(tagNome || "nenhum").replace(/_/g, '-').replace(/\s+/g, '-').toLowerCase();
       let timeLabelHtml = '';
       const tagsPermanentes = ['Link agendado', 'Jurídica'];
 
@@ -227,6 +235,7 @@ export function renderCobrancaList(data) {
       `).join('');
 
       const card = document.createElement('div');
+      const safeClass = normalizeCSSClass(tagNome);
       card.className = `cobranca-card status-${safeClass}`;
   
       card.innerHTML = `
@@ -519,73 +528,80 @@ export function updateStageButtons(aluno) {
 window.updateStageButtons = updateStageButtons;
 
 export async function nextCallStage() {
-  if (!currentActionStudentId) return;
-  const aluno = window.cobrancaList.find(a => a.id === currentActionStudentId);
-  if (!aluno) return;
-
-  const novaEtapa = (aluno.LigaEtapa || 0) + 1;
+  if (!currentGroupedStudent) return;
+  
+  const novaEtapa = (currentGroupedStudent.LigaEtapa || 0) + 1;
   const userEmail = getCurrentUserEmail(); 
+  const agora = new Date();
   
   try {
-    const alunoRef = doc(db, COBRANCA_COLLECTION, currentActionStudentId);
-    await updateDoc(alunoRef, {
-      LigaEtapa: novaEtapa,
-      UltimaAcao: new Date(),
-      UltimoResponsavel: userEmail,
-      HistoricoLogs: arrayUnion({
-        tipo: 'ligacao',
-        detalhe: `Ligação #${novaEtapa} realizada`,
-        responsavel: userEmail,
-        timestamp: new Date().toISOString()
-      })
+    const batch = writeBatch(db);
+    currentGroupedStudent.todosIds.forEach(docId => {
+        batch.update(doc(db, COBRANCA_COLLECTION, docId), {
+            LigaEtapa: novaEtapa,
+            UltimaAcao: agora,
+            UltimoResponsavel: userEmail,
+            HistoricoLogs: arrayUnion({
+                tipo: 'ligacao',
+                detalhe: `Ligação #${novaEtapa} realizada (via grupo)`,
+                responsavel: userEmail,
+                timestamp: agora.toISOString()
+            })
+        });
     });
 
-    aluno.LigaEtapa = novaEtapa;
-    aluno.UltimaAcao = new Date();
-    aluno.UltimoResponsavel = userEmail;
+    await batch.commit();
+
+    // Atualiza o objeto em memória para o modal refletir a mudança imediatamente
+    currentGroupedStudent.LigaEtapa = novaEtapa;
+    currentGroupedStudent.UltimaAcao = agora;
+    currentGroupedStudent.UltimoResponsavel = userEmail;
     
-    updateStageButtons(aluno);
-    renderCobrancaList(window.cobrancaList);
+    updateStageButtons(currentGroupedStudent);
+    if(typeof loadCobrancaData === 'function') loadCobrancaData();
 
   } catch (err) {
     console.error(err);
-    alert("Erro ao salvar etapa.");
+    window.showToast("Erro ao salvar ligação.", "error");
   }
 }
 window.nextCallStage = nextCallStage;
 
 export async function nextTemplateStage() {
-  if (!currentActionStudentId) return;
-  const aluno = window.cobrancaList.find(a => a.id === currentActionStudentId);
-  if (!aluno) return;
-
-  const novaEtapa = (aluno.TemplateEtapa || 0) + 1;
+  if (!currentGroupedStudent) return;
+  
+  const novaEtapa = (currentGroupedStudent.TemplateEtapa || 0) + 1;
   const userEmail = getCurrentUserEmail();
+  const agora = new Date();
   
   try {
-    const alunoRef = doc(db, COBRANCA_COLLECTION, currentActionStudentId);
-    await updateDoc(alunoRef, {
-      TemplateEtapa: novaEtapa,
-      UltimaAcao: new Date(),
-      UltimoResponsavel: userEmail,
-      HistoricoLogs: arrayUnion({
-        tipo: 'template',
-        detalhe: `Template #${novaEtapa} enviado`,
-        responsavel: userEmail,
-        timestamp: new Date().toISOString()
-      })
+    const batch = writeBatch(db);
+    currentGroupedStudent.todosIds.forEach(docId => {
+        batch.update(doc(db, COBRANCA_COLLECTION, docId), {
+            TemplateEtapa: novaEtapa,
+            UltimaAcao: agora,
+            UltimoResponsavel: userEmail,
+            HistoricoLogs: arrayUnion({
+                tipo: 'template',
+                detalhe: `Template #${novaEtapa} enviado (via grupo)`,
+                responsavel: userEmail,
+                timestamp: agora.toISOString()
+            })
+        });
     });
 
-    aluno.TemplateEtapa = novaEtapa;
-    aluno.UltimaAcao = new Date();
-    aluno.UltimoResponsavel = userEmail;
+    await batch.commit();
+
+    currentGroupedStudent.TemplateEtapa = novaEtapa;
+    currentGroupedStudent.UltimaAcao = agora;
+    currentGroupedStudent.UltimoResponsavel = userEmail;
     
-    updateStageButtons(aluno);
-    renderCobrancaList(window.cobrancaList);
+    updateStageButtons(currentGroupedStudent);
+    if(typeof loadCobrancaData === 'function') loadCobrancaData();
 
   } catch (err) {
     console.error(err);
-    alert("Erro ao salvar etapa.");
+    window.showToast("Erro ao salvar template.", "error");
   }
 }
 window.nextTemplateStage = nextTemplateStage;
