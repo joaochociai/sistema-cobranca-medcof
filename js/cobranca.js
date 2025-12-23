@@ -2,7 +2,7 @@
 import { db, auth } from './firebase.js'; 
 import {
   collection, getDocs, query, orderBy, addDoc,
-  updateDoc, doc, arrayUnion, deleteDoc, where, deleteField 
+  updateDoc, doc, arrayUnion, deleteDoc, where, deleteField, writeBatch, serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import { formatDateUTC, parseDateBR, mapStatusToLabel } from './utils.js';
@@ -139,95 +139,113 @@ export function renderCobrancaList(data) {
     return;
   }
 
-  const sortedData = data.sort((a, b) => (a.diasAtrasoCalculado || 0) - (b.diasAtrasoCalculado || 0));
+  // --- NOVO: LÓGICA DE AGRUPAMENTO POR CPF ---
+  const groupedMap = {};
+
+  data.forEach(item => {
+    const key = item.CPF || item.Email || item.Nome; // Prioridade para CPF como chave única
+    
+    if (!groupedMap[key]) {
+      // Cria o primeiro registro do aluno no mapa
+      groupedMap[key] = {
+        ...item,
+        listaCursos: [{
+          id: item.id,
+          nome: item.Curso,
+          valor: item.Valor,
+          vencimento: item.Vencimento
+        }],
+        todosIds: [item.id] // Guarda todos os IDs aleatórios do Firebase
+      };
+    } else {
+      // Se o aluno já existe (duplicado por curso), adicionamos o curso à lista
+      groupedMap[key].listaCursos.push({
+        id: item.id,
+        nome: item.Curso,
+        valor: item.Valor,
+        vencimento: item.Vencimento
+      });
+      groupedMap[key].todosIds.push(item.id);
+
+      // Mantém no card principal os dados do curso mais atrasado para o cronômetro/badge
+      if ((item.diasAtrasoCalculado || 0) > (groupedMap[key].diasAtrasoCalculado || 0)) {
+        groupedMap[key].diasAtrasoCalculado = item.diasAtrasoCalculado;
+        groupedMap[key].Data1Jur = item.Data1Jur;
+        groupedMap[key].DataTag = item.DataTag;
+        groupedMap[key].StatusExtra = item.StatusExtra;
+      }
+      
+      // Soma contadores de ligações e mensagens de todos os cursos
+      groupedMap[key].LigaEtapa = (groupedMap[key].LigaEtapa || 0) + (item.LigaEtapa || 0);
+      groupedMap[key].TemplateEtapa = (groupedMap[key].TemplateEtapa || 0) + (item.TemplateEtapa || 0);
+    }
+  });
+
+  // Converte o mapa de volta para array e ordena
+  const groupedArray = Object.values(groupedMap);
+  const sortedData = groupedArray.sort((a, b) => (b.diasAtrasoCalculado || 0) - (a.diasAtrasoCalculado || 0));
+
+  // --- FIM DA LÓGICA DE AGRUPAMENTO ---
 
   sortedData.forEach(aluno => {
-      // Badge de dias
+      // Badge de dias (mantido)
       const diasLabel = aluno.diasAtrasoCalculado 
           ? `<span style="background:#fff3cd; color:#856404; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold; margin-left:5px;">${aluno.diasAtrasoCalculado} dias</span>`
           : '';
       
       const dataLimite = aluno.Data1Jur ? (typeof formatDateUTC === 'function' ? formatDateUTC(aluno.Data1Jur) : aluno.Data1Jur) : 'N/A';
 
-      // -----------------------------------------------------------
-      // LÓGICA DO CRONÔMETRO (COM DIAGNÓSTICO)
-      // -----------------------------------------------------------
+      // Lógica do cronômetro (mantida exatamente como a sua)
       const tagNome = aluno.StatusExtra?.tipo || aluno.StatusExtra || null;
       const safeClass = String(tagNome || "nenhum").replace(/_/g, '-').replace(/\s+/g, '-').toLowerCase();
-
       let timeLabelHtml = '';
-
-      // LISTA DE EXCEÇÕES VISUAIS
       const tagsPermanentes = ['Link agendado', 'Jurídica'];
 
-      // Só calcula o tempo se NÃO for uma tag permanente
       if (tagNome && aluno.DataTag && !tagsPermanentes.includes(tagNome)) {
           const dataTag = aluno.DataTag.toDate ? aluno.DataTag.toDate() : new Date(aluno.DataTag);
           const agora = new Date();
-          
           const diffDias = (agora - dataTag) / (1000 * 60 * 60 * 24);
           const diasRestantes = 3 - diffDias;
-
           let textoTempo = '';
-          if (diasRestantes < 0) {
-            textoTempo = '(expirando...)';
-          } else if (diasRestantes < 1) {
-            const horas = Math.ceil(diasRestantes * 24);
-            textoTempo = `(${horas}h rest.)`;
-          } else {
-            textoTempo = `(${Math.ceil(diasRestantes)}d rest.)`;
-          }
-
-          timeLabelHtml = `<span style="font-size:0.85em; opacity:1; margin-left:6px; color:#333; font-weight:bold;">${textoTempo}</span>`;
-      }
-      // -------------------
-
-      if (tagNome && aluno.DataTag) {
-          const dataTag = aluno.DataTag.toDate ? aluno.DataTag.toDate() : new Date(aluno.DataTag);
-          const agora = new Date();
-          
-          const diffDias = (agora - dataTag) / (1000 * 60 * 60 * 24);
-          const diasRestantes = 3 - diffDias;
-
-          let textoTempo = '';
-          if (diasRestantes < 0) {
-             textoTempo = '(expirando...)';
-          } else if (diasRestantes < 1) {
-             const horas = Math.ceil(diasRestantes * 24);
-             textoTempo = `(${horas}h rest.)`;
-          } else {
-             textoTempo = `(${Math.ceil(diasRestantes)}d rest.)`;
-          }
-
-          // Forcei uma cor preta aqui para garantir que não esteja invisível
+          if (diasRestantes < 0) textoTempo = '(expirando...)';
+          else if (diasRestantes < 1) textoTempo = `(${Math.ceil(diasRestantes * 24)}h rest.)`;
+          else textoTempo = `(${Math.ceil(diasRestantes)}d rest.)`;
           timeLabelHtml = `<span style="font-size:0.85em; opacity:1; margin-left:6px; color:#333; font-weight:bold;">${textoTempo}</span>`;
       }
 
       const labelTag = typeof mapStatusToLabel === 'function' ? mapStatusToLabel(tagNome) : tagNome;
+      const statusLabelHtml = tagNome ? `<p class="extra-status">${labelTag} ${timeLabelHtml}</p>` : '';
 
-      const statusLabelHtml = tagNome
-        ? `<p class="extra-status">${labelTag} ${timeLabelHtml}</p>`
-        : '';
+      // --- NOVO: GERADOR DA LISTA DE CURSOS PARA O CARD ---
+      const cursosHTML = aluno.listaCursos.map(c => `
+        <div style="border-left: 2px solid #eee; padding-left: 8px; margin-bottom: 4px;">
+           <span style="font-size:13px; display:block;"><strong>Curso:</strong> ${c.nome || '-'}</span>
+           <span style="font-size:12px; color:#666;">Valor: ${c.valor || '-'} | Venc: ${c.vencimento || '-'}</span>
+        </div>
+      `).join('');
 
-      const ligaCount = aluno.LigaEtapa || 0;
-      const msgCount = aluno.TemplateEtapa || 0;
-  
       const card = document.createElement('div');
       card.className = `cobranca-card status-${safeClass}`;
   
       card.innerHTML = `
         <div class="card-info">
-          <h3>${aluno.Nome}</h3>
-          <p style="margin-top:10px;"><strong>Curso:</strong> ${aluno.Curso || '-'}</p>
-          <p><strong>Valor:</strong> ${aluno.Valor || '-'} | <strong>Venc:</strong> ${aluno.Vencimento || '-'} ${diasLabel}</p>
+          <div style="display:flex; justify-content:space-between; align-items:start;">
+             <h3>${aluno.Nome}</h3>
+             ${aluno.listaCursos.length > 1 ? `<span style="background:#e7f1ff; color:#007bff; font-size:10px; padding:2px 6px; border-radius:10px; font-weight:bold;">${aluno.listaCursos.length} CURSOS</span>` : ''}
+          </div>
+          
+          <div style="margin: 10px 0;">
+            ${cursosHTML}
+          </div>
+
           <p style="margin-top:5px; font-size:12px; color:#555;">
-              📞 Ligações: <strong>${ligaCount}</strong> | 💬 Templates: <strong>${msgCount}</strong>
+              📞 Total Ligações: <strong>${aluno.LigaEtapa || 0}</strong> | 💬 Total Templates: <strong>${aluno.TemplateEtapa || 0}</strong> ${diasLabel}
           </p>
           <p class="limit-date">⚠️ Jurídico em: ${dataLimite}</p>
           ${statusLabelHtml}
         </div>
         <div class="card-actions">
-          <button class="btn-actions-open" onclick="window.openActionsModal('${aluno.id}')">⚡ Ações</button>
+          <button class="btn-actions-open" onclick='window.openActionsModal(${JSON.stringify(aluno)})'>⚡ Ações</button>
           <div class="small-actions">
             <button class="icon-btn trash-icon admin-only" onclick="window.archiveStudent('${aluno.id}')">🗑️</button>
           </div>
@@ -324,59 +342,139 @@ window.processImport = async function () {
   }
 };
 
+async function salvarTagParaTodosOsCursos(alunoAgrupado, novaTag) {
+  const batch = writeBatch(db);
+  const userEmail = getCurrentUserEmail();
+  const ids = alunoAgrupado.todosIds || [alunoAgrupado.id];
+
+  ids.forEach(docId => {
+    const docRef = doc(db, COBRANCA_COLLECTION, docId);
+    
+    if (novaTag) {
+      batch.update(docRef, {
+        StatusExtra: { tipo: novaTag, atualizadoEm: new Date(), por: userEmail },
+        UltimoResponsavel: userEmail,
+        DataTag: new Date(),
+        HistoricoLogs: arrayUnion({
+          tipo: "tag",
+          detalhe: `Tag "${novaTag}" adicionada via card agrupado`,
+          responsavel: userEmail,
+          timestamp: new Date().toISOString()
+        })
+      });
+    } else {
+      batch.update(docRef, {
+        StatusExtra: deleteField(),
+        DataTag: deleteField(),
+        UltimoResponsavel: userEmail,
+        HistoricoLogs: arrayUnion({
+          tipo: "tag",
+          detalhe: `Tag removida via card agrupado`,
+          responsavel: userEmail,
+          timestamp: new Date().toISOString()
+        })
+      });
+    }
+  });
+
+  return await batch.commit();
+}
+
 // -------------------------
 // 4. MODAL DE AÇÕES (DETALHES)
 // -------------------------
-export function openActionsModal(docId) {
-  const aluno = window.cobrancaList.find(a => a.id === docId);
-  if (!aluno) return;
+// Variável global para armazenar os dados do grupo atual que está sendo editado
+let currentGroupedStudent = null;
 
-  currentActionStudentId = docId;
+export function openActionsModal(alunoObjeto) {
+  // alunoObjeto agora é o objeto completo que enviamos via JSON.stringify no renderCobrancaList
+  if (!alunoObjeto) return;
+
+  // Armazenamos o objeto completo e a lista de IDs para o salvamento em lote posterior
+  currentGroupedStudent = alunoObjeto;
+  window.currentActionStudentId = alunoObjeto.id; // Mantemos compatibilidade com funções antigas que usem apenas o ID principal
+
+  // 1. Preenche Dados básicos (Campos compartilhados)
+  document.getElementById('actions-student-name').textContent = alunoObjeto.Nome;
   
-  // 1. Preenche Dados básicos
-  document.getElementById('actions-student-name').textContent = aluno.Nome;
+  // Calculamos o valor total somado de todos os cursos para exibição no topo
+  const totalCursos = alunoObjeto.listaCursos.length;
+  
+  // Criamos o HTML para listar todos os cursos e seus respectivos valores/vencimentos
+  const cursosListaHtml = alunoObjeto.listaCursos.map(curso => `
+    <div style="background: #f8f9fa; border-left: 3px solid var(--primary-blue); padding: 8px 12px; margin-bottom: 8px; border-radius: 4px;">
+      <p style="margin:0; font-size: 14px;"><strong>Curso:</strong> ${curso.nome || '-'}</p>
+      <p style="margin:0; font-size: 12px; color: #666;">Valor: ${curso.valor || '-'} | Vencimento: ${curso.vencimento || '-'}</p>
+    </div>
+  `).join('');
+
   document.getElementById('actions-student-details').innerHTML = `
-    <p><strong>Email:</strong> ${aluno.Email || '-'}</p>
-    <p><strong>Telefone:</strong> ${aluno.Telefone || '-'}</p>
-    <p><strong>CPF:</strong> ${aluno.CPF || '-'}</p>
-    <p><strong>Valor:</strong> ${aluno.Valor || '-'} (${aluno.FormaPag || '-'})</p>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+        <p style="margin:0;"><strong>Email:</strong> ${alunoObjeto.Email || '-'}</p>
+        <p style="margin:0;"><strong>Telefone:</strong> ${alunoObjeto.Telefone || '-'}</p>
+        <p style="margin:0;"><strong>CPF:</strong> ${alunoObjeto.CPF || '-'}</p>
+        <p style="margin:0;"><strong>Total de Cursos:</strong> ${totalCursos}</p>
+    </div>
+    <div style="margin-top: 10px;">
+        <p style="margin-bottom: 8px;"><strong>Detalhamento dos Contratos:</strong></p>
+        ${cursosListaHtml}
+    </div>
   `;
 
-  // 2. Preenche o Select com o Status Atual
-  // Tenta pegar o valor de diferentes formatos (string antiga ou objeto novo)
-  const tagAtual = aluno.StatusExtra?.tipo || aluno.StatusExtra || '';
-  
+  // 2. Preenche o Select com o Status Atual (pegando a tag mais recente/urgente do grupo)
+  const tagAtual = alunoObjeto.StatusExtra?.tipo || alunoObjeto.StatusExtra || '';
   const select = document.getElementById("extra-status-select");
   if (select) select.value = tagAtual;
 
-  // 3. Preenche Propostas
-  const props = aluno.Propostas || {};
+  // 2.1 Preenche os cursos do aluno e permite alteração do valor pago!
+  const checkboxContainer = document.getElementById('course-checkbox-list');
+  if (checkboxContainer) {
+      checkboxContainer.innerHTML = alunoObjeto.listaCursos.map(curso => {
+          // Limpamos o valor (R$ 1.500,00 -> 1500.00) para o input numérico
+          const valorNumerico = curso.valor ? parseFloat(curso.valor.replace(/[^\d,.-]/g, '').replace('.', '').replace(',', '.')) : 0;
+
+          return `
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; background: #fff; padding: 5px 10px; border-radius: 5px;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+                      <input type="checkbox" class="course-payment-check" value="${curso.id}" id="chk-${curso.id}" checked>
+                      <label for="chk-${curso.id}" style="font-size: 13px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">
+                          ${curso.nome}
+                      </label>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                      <span style="font-size: 12px; font-weight: bold; color: #28a745;">R$</span>
+                      <input type="text" 
+                            class="course-payment-amount" 
+                            data-id="${curso.id}" 
+                            value="${valorNumerico.toLocaleString('pt-BR', {minimumFractionDigits: 2})}" 
+                            style="width: 90px; padding: 3px; border: 1px solid #ccc; border-radius: 4px; text-align: right; font-weight: bold; color: #28a745;">
+                  </div>
+              </div>
+          `;
+      }).join('');
+  }
+
+  // 3. Preenche Propostas (usa as propostas do registro principal do grupo)
+  const props = alunoObjeto.Propostas || {};
   for(let i=1; i<=4; i++) {
       const el = document.getElementById(`prop-${i}`);
       if(el) el.value = props[`p${i}`] || '';
   }
 
-  // 4. Atualiza botões de etapa (se houver essa função)
+  // 4. Atualiza botões de etapa (passando o objeto agrupado)
   if (typeof updateStageButtons === 'function') {
-      updateStageButtons(aluno);
+      updateStageButtons(alunoObjeto);
   }
 
   // 5. Atualiza a cor do cabeçalho do Modal (Visual)
   const modalHeader = document.querySelector('.actions-header');
   if (modalHeader) {
-      modalHeader.className = 'actions-header'; // Reseta classes para o padrão
-      
+      modalHeader.className = 'actions-header'; 
       if(tagAtual) {
-          // --- CORREÇÃO AQUI ---
-          // Usamos a variável 'tagAtual' (que vem do aluno) e não 'value'
           const safe = String(tagAtual).replace(/[\s_]+/g, '-').toLowerCase();
-          
-          // Gera classe ex: header-status-link-agendado
           modalHeader.classList.add(`header-status-${safe}`);
       }
   }
-
-  // (Removido o window.showToast daqui, pois só deve aparecer ao salvar, não ao abrir)
 
   // 6. Exibe o Modal
   const overlay = document.getElementById('actions-modal-overlay');
@@ -527,125 +625,124 @@ window.saveProposal = async function(index) {
 // 7. STATUS EXTRA & PAGAMENTO
 // -------------------------
 window.saveExtraStatus = async function () {
-  if (!currentActionStudentId) return;
+  // 1. Verifica se há um aluno selecionado (seja agrupado ou individual)
+  const alunoParaAtualizar = currentGroupedStudent || (currentActionStudentId ? { id: currentActionStudentId, todosIds: [currentActionStudentId] } : null);
+
+  if (!alunoParaAtualizar) return;
   
   const sel = document.getElementById('extra-status-select');
   const value = sel ? sel.value : '';
-  const userEmail = getCurrentUserEmail();
-  const docRef = doc(db, COBRANCA_COLLECTION, currentActionStudentId);
 
   try {
-    // 1. Salva ou Remove no Banco
-    if (value) {
-        await updateDoc(docRef, {
-          StatusExtra: { tipo: value, atualizadoEm: new Date(), por: userEmail },
-          UltimoResponsavel: userEmail,
-          DataTag: new Date() // Salva data para o cronômetro
-        });
-    } else {
-        await updateDoc(docRef, {
-          StatusExtra: deleteField(),
-          DataTag: deleteField(),
-          UltimoResponsavel: userEmail
-        });
-    }
-    
-    // 2. Atualiza a lista local e a tela
-    const idx = window.cobrancaList.findIndex(a => a.id === currentActionStudentId);
-    
-    if (idx > -1) {
-      // Atualiza memória
-      if (value) {
+    // 2. CHAMADA DA FUNÇÃO (Isso ativa a função que estava apagada!)
+    await salvarTagParaTodosOsCursos(alunoParaAtualizar, value);
+
+    // 3. Sincroniza a memória local para o card atualizar na tela sem F5
+    const ids = alunoParaAtualizar.todosIds || [alunoParaAtualizar.id];
+    ids.forEach(id => {
+      const idx = window.cobrancaList.findIndex(a => a.id === id);
+      if (idx > -1) {
+        if (value) {
           window.cobrancaList[idx].StatusExtra = { tipo: value };
           window.cobrancaList[idx].DataTag = new Date();
-      } else {
+        } else {
           delete window.cobrancaList[idx].StatusExtra;
           delete window.cobrancaList[idx].DataTag;
+        }
       }
-      
-      // Atualiza a lista atrás do modal
-      renderCobrancaList(window.cobrancaList);
-      
-      // --- CORREÇÃO DO ERRO AQUI ---
-      // Atualiza a cor do cabeçalho do Modal Aberto
-      const modalHeader = document.querySelector('.actions-header');
-      if (modalHeader) {
-          modalHeader.className = 'actions-header'; // Reseta classes
-          
-          if(value) {
-              // Troca ESPAÇOS (\s) e UNDERLINES (_) por hífen (-)
-              // Ex: "Link enviado" vira "link-enviado"
-              const safe = value.replace(/[\s_]+/g, '-').toLowerCase();
-              
-              // Adiciona classe válida: header-status-link-enviado
-              modalHeader.classList.add(`header-status-${safe}`);
-          }
+    });
+
+    // 4. Atualiza a lista visual e o cabeçalho do modal
+    renderCobrancaList(window.cobrancaList);
+    
+    const modalHeader = document.querySelector('.actions-header');
+    if (modalHeader) {
+      modalHeader.className = 'actions-header';
+      if (value) {
+        const safe = value.replace(/[\s_]+/g, '-').toLowerCase();
+        modalHeader.classList.add(`header-status-${safe}`);
       }
     }
 
-    window.showToast(value ? "Status atualizado!" : "Status removido!");
+    window.showToast(value ? "Status atualizado em todos os cursos!" : "Status removido!");
 
   } catch (error) { 
-      console.error(error); 
-      window.showToast("Erro ao atualizar.", "error");
+    console.error("Erro ao processar salvamento:", error); 
+    window.showToast("Erro ao atualizar os cursos.", "error");
   }
 };
 
 window.registerPayment = async function() {
-  if (!currentActionStudentId) return;
-  
-  const dateVal = document.getElementById('payment-date')?.value;
-  const originVal = document.getElementById('payment-origin')?.value;
-  const userEmail = getCurrentUserEmail();
+    if (!currentGroupedStudent) return;
 
-  // 1. Validação Visual
-  if (!dateVal || !originVal) {
-      return Swal.fire('Campos Obrigatórios', 'Preencha a data e a origem do pagamento.', 'warning');
-  }
-
-  // 2. Confirmação
-  const result = await Swal.fire({
-      title: 'Confirmar Baixa?',
-      text: "O status mudará para 'Pago' e o aluno sairá desta lista.",
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: '#28a745',
-      cancelButtonColor: '#6c757d',
-      confirmButtonText: 'Sim, confirmar!',
-      cancelButtonText: 'Cancelar'
-  });
-
-  if (!result.isConfirmed) return;
-
-  try {
-    // 3. Loading
-    Swal.fire({ title: 'Processando...', didOpen: () => Swal.showLoading() });
-
-    // --- CORREÇÃO DE DATA AQUI ---
-    // Pega "2025-12-18" e divide em partes
-    const [ano, mes, dia] = dateVal.split('-').map(Number);
+    // 1. Captura os cursos marcados
+    const checkboxes = document.querySelectorAll('.course-payment-check:checked');
     
-    // Cria a data usando o horário do navegador (Local) e define para meio-dia (12h)
-    // Isso evita que fusos horários joguem a data para o dia anterior
-    const dataCorreta = new Date(ano, mes - 1, dia, 12, 0, 0);
+    if (checkboxes.length === 0) {
+        return Swal.fire('Atenção', 'Selecione pelo menos um curso para baixar.', 'warning');
+    }
 
-    await updateDoc(doc(db, COBRANCA_COLLECTION, currentActionStudentId), {
-      Status: 'Pago',
-      DataPagamento: dataCorreta, // Usa a data ajustada
-      OrigemPagamento: originVal,
-      BaixadoPor: userEmail
+    const dateVal = document.getElementById('payment-date')?.value;
+    const originVal = document.getElementById('payment-origin')?.value;
+    const userEmail = getCurrentUserEmail();
+
+    if (!dateVal || !originVal) {
+        return Swal.fire('Campos Obrigatórios', 'Preencha a data e a origem.', 'warning');
+    }
+
+    const result = await Swal.fire({
+        title: 'Confirmar Baixa?',
+        text: "Os valores editados serão registrados como o pagamento final destes cursos.",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#28a745',
+        confirmButtonText: 'Sim, registrar!'
     });
-    
-    closeActionsModal();
 
-    // 4. Sucesso
-    Swal.fire('Baixa Realizada!', 'O pagamento foi registrado com sucesso.', 'success');
-    
-    loadCobrancaData();
-  } catch (error) { 
-      console.error(error);
-      Swal.fire('Erro', 'Não foi possível registrar o pagamento.', 'error');
-  }
+    if (!result.isConfirmed) return;
+
+    try {
+        Swal.fire({ title: 'Processando...', didOpen: () => Swal.showLoading() });
+
+        const [ano, mes, dia] = dateVal.split('-').map(Number);
+        const dataCorreta = new Date(ano, mes - 1, dia, 12, 0, 0);
+
+        const batch = writeBatch(db);
+        
+        // 2. Iterar pelos itens selecionados para pegar o valor de cada input
+        checkboxes.forEach(cb => {
+            const docId = cb.value;
+            // Busca o input de valor correspondente a este curso (pelo data-id)
+            const inputValor = document.querySelector(`.course-payment-amount[data-id="${docId}"]`);
+            const valorFinal = inputValor ? inputValor.value : "0,00";
+
+            const docRef = doc(db, COBRANCA_COLLECTION, docId);
+            batch.update(docRef, {
+                Status: 'Pago',
+                DataPagamento: dataCorreta,
+                OrigemPagamento: originVal,
+                ValorPago: `R$ ${valorFinal}`, // Registramos o valor que foi efetivamente pago
+                BaixadoPor: userEmail,
+                HistoricoLogs: arrayUnion({
+                    tipo: "pagamento",
+                    detalhe: `Baixa com valor ajustado: R$ ${valorFinal} (${originVal})`,
+                    responsavel: userEmail,
+                    timestamp: new Date().toISOString()
+                })
+            });
+        });
+
+        await batch.commit();
+        
+        closeActionsModal();
+        Swal.fire('Sucesso!', 'Baixa(s) realizada(s) com os valores informados.', 'success');
+        
+        if (typeof loadCobrancaData === 'function') loadCobrancaData();
+
+    } catch (error) { 
+        console.error(error);
+        Swal.fire('Erro', 'Falha ao processar pagamento.', 'error');
+    }
 };
 
 async function setExtraTag(studentId, tagName) {
@@ -845,19 +942,76 @@ function renderPaymentsTable(list) {
             dataBaixa = d.toLocaleDateString('pt-BR');
         }
 
-        const valor = item.Valor || '-';
+        // LÓGICA DE PRIORIDADE: Prioriza o valor ajustado (ValorPago)
+        const valorExibido = item.ValorPago || item.Valor || '-';
+        
+        // Estilização extra para identificar quando o valor foi alterado
+        const estiloValor = item.ValorPago ? 'color: #28a745; font-weight: 700;' : 'font-weight: 600;';
+
         const responsavel = item.BaixadoPor || '<span style="color:#999; font-style:italic;">Não registrado</span>';
 
         tr.innerHTML = `
-            <td><strong>${dataBaixa}</strong></td>
-            <td>${item.Nome}</td>
-            <td>${valor}</td>
-            <td>${item.OrigemPagamento || '-'}</td>
-            <td style="color: #198754; font-weight: 600;">${responsavel}</td>
-        `;
-        tbody.appendChild(tr);
+        <td><strong>${dataBaixa}</strong></td>
+        <td>${item.Nome}</td>
+        <td style="${estiloValor}">${valorExibido}</td>
+        <td>
+            <span style="background: #e9ecef; padding: 4px 10px; border-radius: 4px; font-size: 12px; white-space: nowrap; display: inline-block; line-height: 1.2;">
+                ${item.OrigemPagamento || '-'}
+            </span>
+        </td>
+        <td style="color: #198754; font-weight: 600;">${responsavel}</td>
+    `;
+    tbody.appendChild(tr);
     });
 }
+
+window.openSchedulingForGrouped = async function() {
+    if (!currentGroupedStudent || !currentGroupedStudent.listaCursos) {
+        return Swal.fire('Erro', 'Dados do aluno não encontrados.', 'error');
+    }
+
+    const cursos = currentGroupedStudent.listaCursos;
+
+    // 1. Caso o aluno só tenha 1 curso, vai direto para o agendamento
+    if (cursos.length === 1) {
+        proceedToScheduling(cursos[0]);
+        return;
+    }
+
+    // 2. Caso tenha mais de um, abre o Swal para seleção
+    const optionsHtml = cursos.map((c, idx) => `
+        <div style="text-align: left; margin-bottom: 12px; padding: 12px; border: 1px solid #e0e0e0; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px;" 
+             onclick="document.getElementById('radio-sched-${idx}').checked = true">
+            <input type="radio" name="swal-course-choice" id="radio-sched-${idx}" value="${idx}" ${idx === 0 ? 'checked' : ''} style="cursor:pointer; width: 18px; height: 18px;">
+            <label for="radio-sched-${idx}" style="cursor:pointer; flex: 1;">
+                <strong style="display:block; font-size: 14px; color: #333;">${c.nome}</strong>
+                <span style="font-size: 12px; color: #6A1B9A; font-weight: 700;">Valor: ${c.valor}</span>
+            </label>
+        </div>
+    `).join('');
+
+    const { value: selectedIndex } = await Swal.fire({
+        title: 'Selecionar Curso',
+        text: 'Para qual destes cursos você deseja agendar o link?',
+        html: `<div style="margin-top: 15px;">${optionsHtml}</div>`,
+        showCancelButton: true,
+        confirmButtonText: 'Continuar para Agendamento',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#6A1B9A',
+        preConfirm: () => {
+            const selected = document.querySelector('input[name="swal-course-choice"]:checked');
+            if (!selected) {
+                Swal.showValidationMessage('Selecione um curso para continuar');
+                return false;
+            }
+            return selected.value;
+        }
+    });
+
+    if (selectedIndex !== undefined) {
+        proceedToScheduling(cursos[selectedIndex]);
+    }
+};
 
 // Expor globalmente para o HTML acessar
 window.loadPaymentsList = loadPaymentsList;
@@ -1058,64 +1212,92 @@ window.exportNoAnswerStudents = function() {
 };
 
 // Função para levar dados da Cobrança para a Agenda
-window.bridgeToAgenda = function() {
-    // 1. Segurança: Verifica se tem aluno selecionado
-    if (!currentActionStudentId) return;
-
-    const aluno = window.cobrancaList.find(a => a.id === currentActionStudentId);
-    if (!aluno) return;
-
-    // 2. Fecha o Modal de Ações e o Overlay (Cobrança)
-    // Ajuste os IDs se o seu modal de ações tiver outro nome
-    const actionsOverlay = document.getElementById('actions-modal-overlay');
-    const actionsModal = document.getElementById('actions-modal'); // ou o ID do container do modal
+window.bridgeToAgenda = async function() {
+    // 1. Segurança: Verifica se temos o aluno agrupado em memória
+    // Usamos o objeto que criamos no openActionsModal para ter acesso a todos os cursos
+    const aluno = currentGroupedStudent || (window.cobrancaList ? window.cobrancaList.find(a => a.id === currentActionStudentId) : null);
     
+    if (!aluno) {
+        return Swal.fire('Erro', 'Dados do aluno não encontrados para importação.', 'error');
+    }
+
+    const cursos = aluno.listaCursos || [{ nome: aluno.Curso, valor: aluno.Valor }];
+    let cursoSelecionado = cursos[0];
+
+    // 2. Lógica de Seleção: Se houver mais de um curso, pergunta qual agendar
+    if (cursos.length > 1) {
+        const optionsHtml = cursos.map((c, idx) => `
+            <div style="text-align: left; margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 10px;" 
+                 onclick="document.getElementById('swal-radio-${idx}').checked = true">
+                <input type="radio" name="selectedCourseIdx" id="swal-radio-${idx}" value="${idx}" ${idx === 0 ? 'checked' : ''}>
+                <label for="swal-radio-${idx}" style="flex: 1; cursor: pointer;">
+                    <strong style="display:block; font-size: 14px;">${c.nome}</strong>
+                    <span style="font-size: 12px; color: #666;">Valor: ${c.valor}</span>
+                </label>
+            </div>
+        `).join('');
+
+        const { value: index } = await Swal.fire({
+            title: 'Escolha o Curso',
+            text: 'Para qual curso você deseja gerar o agendamento?',
+            html: `<div style="margin-top:15px;">${optionsHtml}</div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Confirmar e Ir',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#6A1B9A',
+            preConfirm: () => {
+                const picked = document.querySelector('input[name="selectedCourseIdx"]:checked');
+                return picked ? picked.value : null;
+            }
+        });
+
+        if (index === undefined) return; // Usuário cancelou
+        cursoSelecionado = cursos[index];
+    }
+
+    // 3. Execução da Transição (Seu código original adaptado)
+    
+    // A. Fecha o Modal de Ações e o Overlay
+    const actionsOverlay = document.getElementById('actions-modal-overlay');
     if (actionsOverlay) {
         actionsOverlay.classList.add('modal-hidden');
         actionsOverlay.style.display = 'none';
     }
-    if (actionsModal) {
-        actionsModal.classList.remove('active');
-    }
 
-    // 3. Troca de Aba (Esconde as outras e mostra a de Agendamento)
-    // Primeiro, tenta clicar no botão da sidebar se existir (para manter o visual ativo)
+    // B. Troca de Aba (Sidebar)
     const tabBtn = document.querySelector('button[onclick*="tab-agendamento"]') || 
                    document.querySelector('[data-target="tab-agendamento"]');
     
     if (tabBtn) {
         tabBtn.click();
     } else {
-        // Fallback: Força a troca de classe manualmente se não achar o botão
         document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
         const tabTarget = document.getElementById('tab-agendamento');
         if (tabTarget) tabTarget.classList.remove('hidden');
     }
 
-    // 4. Preenche o Formulário (#link-schedule-form)
-    const form = document.getElementById('link-schedule-form');
-    if (form) {
-        // Preenche Nome
-        const inpNome = form.querySelector('[name="Nome"]');
-        if (inpNome) inpNome.value = aluno.Nome || '';
+    // C. Preenchimento do Formulário (#link-schedule-form)
+    // Usamos um pequeno timeout para garantir que a aba carregou no DOM
+    setTimeout(() => {
+        const form = document.getElementById('link-schedule-form');
+        if (form) {
+            const campos = {
+                'Nome': aluno.Nome,
+                'Email': aluno.Email,
+                'Curso': cursoSelecionado.nome,
+                'Telefone': aluno.Telefone
+            };
 
-        // Preenche Email
-        const inpEmail = form.querySelector('[name="Email"]');
-        if (inpEmail) inpEmail.value = aluno.Email || '';
+            for (const [name, value] of Object.entries(campos)) {
+                const input = form.querySelector(`[name="${name}"]`);
+                if (input) input.value = value || '';
+            }
+            
+            // Foca no campo de Motivo
+            const inpMotivo = form.querySelector('[name="Motivo"]');
+            if (inpMotivo) inpMotivo.focus();
+        }
 
-        // Preenche Curso
-        const inpCurso = form.querySelector('[name="Curso"]');
-        if (inpCurso) inpCurso.value = aluno.Curso || '';
-
-        // Preenche Telefone
-        const inpTel = form.querySelector('[name="Telefone"]');
-        if (inpTel) inpTel.value = aluno.Telefone || '';
-        
-        // Foca no campo de Motivo para o operador selecionar
-        const inpMotivo = form.querySelector('[name="Motivo"]');
-        if (inpMotivo) inpMotivo.focus();
-    }
-
-    // 5. Feedback
-    if(window.showToast) window.showToast("Dados do aluno importados!", "success");
+        if(window.showToast) window.showToast(`Dados de ${cursoSelecionado.nome} importados!`, "success");
+    }, 300);
 };
