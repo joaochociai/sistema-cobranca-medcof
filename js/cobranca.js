@@ -183,7 +183,9 @@ export function renderCobrancaList(data) {
 
   // Converte o mapa de volta para array e ordena
   const groupedArray = Object.values(groupedMap);
-  const sortedData = groupedArray.sort((a, b) => (b.diasAtrasoCalculado || 0) - (a.diasAtrasoCalculado || 0));
+  const sortedData = groupedArray.sort((a, b) => {
+    return (a.diasAtrasoCalculado || 0) - (b.diasAtrasoCalculado || 0);
+  });
 
   // --- FIM DA LÓGICA DE AGRUPAMENTO ---
 
