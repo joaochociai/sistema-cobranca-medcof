@@ -1,21 +1,21 @@
 :root {
-    /* Cores Principais (Setores) */
-    --primary-blue: #007bff;       /* Geral / Cobrança */
+    /* Cores Principais */
+    --primary-blue: #007bff;      
     --primary-blue-hover: #0056b3;
-    --primary-purple: #6A1B9A;     /* Jurídico */
+    --primary-purple: #6A1B9A;     
     --primary-purple-hover: #4a148c;
     
     /* Cores de Estado */
-    --success-green: #28a745;      /* Sucesso / WhatsApp */
+    --success-green: #28a745;     
     --success-hover: #1e7e34;
-    --danger-red: #dc3545;         /* Erro / Excluir */
-    --warning-yellow: #ffc107;     /* Atenção / Standard */
+    --danger-red: #dc3545;         
+    --warning-yellow: #ffc107;     
     
-    /* Cores Neutras (Fundo e Texto) */
-    --bg-body: #f8f9fa;            /* Fundo da página */
-    --bg-white: #ffffff;           /* Fundo dos cards */
-    --text-main: #343a40;          /* Texto principal (quase preto) */
-    --text-muted: #6c757d;         /* Texto cinza (secundário) */
+    /* Cores Neutras */
+    --bg-body: #f8f9fa;           
+    --bg-white: #ffffff;           
+    --text-main: #343a40;         
+    --text-muted: #6c757d;         
     
     /* Bordas e Divisores */
     --border-color: #ced4da;
@@ -29,8 +29,8 @@ body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     padding: 0;
     margin: 0;
-    background-color: var(--bg-body); /* Fundo levemente cinza */
-    color: var(--text-main); /* Texto principal escuro */
+    background-color: var(--bg-body); 
+    color: var(--text-main); 
     display: block;
     min-height: 100vh;
 }
@@ -56,7 +56,7 @@ h1 {
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 9999; /* Garante que fique sobre tudo */
+    z-index: 9999; 
 }
 
 .login-box {
@@ -95,25 +95,17 @@ h1 {
    3. BARRA LATERAL (SIDEBAR)
    ========================================= */
 #sidebar-menu {
-    width: 240px; 
-    background-color: #ffffff; 
-    color: var(--text-main); 
-    padding: 30px 10px;
-    
-    /* Design Arredondado e Sombra Suave */
-    box-shadow: 4px 0 15px rgba(0, 0, 0, 0.05); 
-    border-right: 1px solid #f0f0f0;
-    border-top-right-radius: 25px;
-    border-bottom-right-radius: 25px;
-
-    position: fixed; 
-    top: 0; bottom: 0; left: 0; 
-    z-index: 100;
-    
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    overflow-y: auto;
+    display: flex;       /* Ativa o modo Flexbox */
+    flex-direction: column; /* Organiza itens um embaixo do outro */
+    height: 100vh;       /* Ocupa 100% da altura da tela */
+    width: 250px;        /* Largura da sidebar (ajuste se precisar) */
+    position: fixed;     /* Fixa na esquerda */
+    left: 0;
+    top: 0;
+    background-color: #fff; /* Cor de fundo */
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1); /* Sombra lateral */
+    z-index: 1000;
+    overflow: hidden;    /* Impede scroll na barra inteira */
 }
 
 .sidebar-top {
@@ -124,59 +116,84 @@ h1 {
 }
 
 
-#sidebar-logo { width: 160px; 
+#sidebar-logo { 
+    max-width: 80%;
     height: auto; 
     display: block; 
     margin: 0 auto 40px auto; }
 
 /* Menu de Navegação */
-#nav-menu { width: 100%; display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; }
-
-.nav-tab {
-    display: block; 
-    width: 100%; 
-    text-align: left;
-    background-color: transparent; 
-    color: var(--text-muted); /* Cinza um pouco mais claro */
-    padding: 10px 15px; 
-    margin: 0;
-    border: none; 
-    cursor: pointer; 
-    font-size: 14px; /* Fonte levemente menor */
+#nav-menu {
+    flex: 1;             
+    overflow-y: auto;    
+    padding: 10px 0;     
+    
+    /* Estilização da barra de rolagem (Fica mais bonito) */
+    scrollbar-width: thin;
+    scrollbar-color: #ccc transparent;
+}
+.nav-tab.admin-only {
+    background-color: #fff;
+    border: 1px solid #eee; /* Uma borda sutil para destacar */
     font-weight: 500;
-    border-radius: 6px; 
-    transition: all 0.2s ease-in-out;
-    border-left: 3px solid transparent; 
+}
+#btn-dashboard.admin-only {
+    border-left: 4px solid #ffc107; /* Amarelo */
+    
+}
+#btn-dash-juridico.admin-only {
+    border-left: 4px solid #0d47a1; /* Azul escuro */
+}
+.nav-tab.admin-only:hover {
+    background-color: #f8f9fa;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.nav-tab, .menu-header {
+    width: 100%;
+    padding: 12px 15px; /* Um pouco mais de preenchimento */
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Espaço entre ícone e texto */
+    border-radius: 6px; /* Bordas arredondadas */
+    transition: all 0.2s ease;
+    margin-bottom: 8px;
+}
+.nav-tab:hover, .menu-header:hover {
+    background-color: #f0f2f5; /* Cinza claro no hover */
+    color: #000;
 }
 .nav-tab.active {
-    background-color: #f0f8ff; /* Azul muito claro */
-    color: var(--primary-blue); 
-    font-weight: 700;
-    border-left: 3px solid var(--primary-blue);
+    background-color: #e7f1ff;
+    color: #007bff;
+    font-weight: 600;
 }
-
+.sector-group {
+    margin-bottom: 8px;
+}
 .nav-tab:hover:not(.active) { 
     background-color: var(--bg-body); 
     color: var(--text-main); 
 }
 
 /* Botão Sair */
-.logout-btn {
-    margin-top: auto !important; 
-    position: absolute;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 80% !important;
-    padding: 12px !important;
-    color: var(--danger-red) !important;
-    background-color: #fff5f5 !important;
-    border: 1px solid #ffc9c9 !important;
-    border-radius: 12px !important;
-    font-weight: 700 !important;
-    text-align: center !important;
-    display: flex !important; justify-content: center; align-items: center;
+.sidebar-footer {
+    flex-shrink: 0;      /* Não encolhe */
+    padding: 15px;
+    background-color: #f8f9fa; /* Um fundo levemente diferente destaca o botão */
+    border-top: 1px solid #eee;
 }
+
+.logout-btn {
+    width: 100%;
+    margin: 0;
+}
+
 .logout-btn:hover {
     background-color: var(--danger-red) !important;
     color: white !important;
@@ -206,7 +223,7 @@ h1 {
     padding: 40px;
     width: calc(100% - 340px);
     display: flex;
-    justify-content: center;   /* CENTRALIZA */
+    justify-content: center;  
 }
 
 .tab-content { margin: 0 auto; width: 100%;  max-width: 900px;; display: flex; flex-direction: column; align-items: center; }
@@ -303,14 +320,14 @@ h1 {
    ========================================= */
 .modal-hidden { display: none; }
 .modal-overlay {
-    position: fixed;   /* OBRIGATÓRIO: Faz flutuar */
+    position: fixed;  
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5); /* Fundo escuro transparente */
-    z-index: 9999;     /* Garante que fique na frente de tudo */
-    display: flex;     /* Centraliza o conteúdo */
+    background-color: rgba(0, 0, 0, 0.5); 
+    z-index: 9999;     
+    display: flex;    
     justify-content: center;
     align-items: center;
     opacity: 1;
@@ -344,15 +361,15 @@ h1 {
 .appointment-names {
     display: flex;
     flex-direction: column;
-    gap: 3px; /* Espaço entre os botões se houver mais de um */
+    gap: 3px; 
     margin-top: 5px;
 }
 
 /* Transforma o link de texto em um botão estilo 'tag' */
 .app-link {
     display: block;
-    background-color: #e7f1ff; /* Fundo azul bem claro */
-    color: var(--primary-blue); /* Texto azul */
+    background-color: #e7f1ff; 
+    color: var(--primary-blue); 
     padding: 4px 8px;
     border-radius: 4px;
     font-size: 0.85em;
@@ -363,12 +380,12 @@ h1 {
     border: 1px solid #cce5ff;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis; /* Adiciona ... se o nome for muito longo */
+    text-overflow: ellipsis; 
 }
 
 .app-link:hover {
-    background-color: var(--primary-blue); /* Fundo azul sólido no hover */
-    color: #ffffff; /* Texto branco */
+    background-color: var(--primary-blue); 
+    color: #ffffff; 
     border-color: var(--primary-blue-hover);
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
@@ -376,19 +393,19 @@ h1 {
 
 /* --- ESTILOS DO MODAL DE DETALHES (Confirmação) --- */
 #details-modal-overlay {
-    position: fixed;       /* CRUCIAL: Fixa na tela, fora do fluxo normal */
+    position: fixed;       
     top: 0;
     left: 0;
-    width: 100vw;          /* Ocupa toda a largura da janela */
-    height: 100vh;         /* Ocupa toda a altura da janela */
-    background-color: rgba(0, 0, 0, 0.5); /* Fundo escurecido */
-    z-index: 9999;         /* Garante que fique acima de tudo */
+    width: 100vw;          
+    height: 100vh;        
+    background-color: rgba(0, 0, 0, 0.5); 
+    z-index: 9999;     
     
     /* Centralização com Flexbox */
-    display: none;         /* Começa escondido */
+    display: none;        
     justify-content: center;
     align-items: center;
-    backdrop-filter: blur(2px); /* Opcional: Desfoque no fundo */
+    backdrop-filter: blur(2px); 
 }
 
 #details-modal-box {
@@ -396,11 +413,11 @@ h1 {
     border-radius: 12px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
     width: 90%;
-    max-width: 600px;      /* Largura máxima do pop-up */
-    max-height: 90vh;      /* Altura máxima (evita que saia da tela) */
-    overflow-y: auto;      /* Permite rolar se o conteúdo for grande */
-    position: relative;    /* Para posicionamento interno */
-    animation: fadeIn 0.3s ease-out; /* Animação suave */
+    max-width: 600px;      
+    max-height: 90vh;      
+    overflow-y: auto;      
+    position: relative;    
+    animation: fadeIn 0.3s ease-out; 
 }
 
 #details-modal-title {
@@ -453,8 +470,6 @@ h1 {
     margin-right: 15px;
 }
 
-/* --- ESTILOS DA ABA DE LISTA --- */
-
 /* Container de Filtros */
 .filters-container {
     display: flex;
@@ -471,7 +486,7 @@ h1 {
 }
 
 .search-box {
-    flex: 2; /* A busca ocupa mais espaço */
+    flex: 2; 
     min-width: 250px;
     padding-right: 25px;
 }
@@ -520,7 +535,7 @@ h1 {
     background-color: #ffffff;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    overflow-x: auto; /* Rolagem horizontal se necessário */
+    overflow-x: auto; 
     border: 1px solid #e9ecef;
 }
 
@@ -528,7 +543,7 @@ h1 {
     width: 100%;
     border-collapse: collapse;
     font-size: 15px;
-    min-width: 900px; /* Garante que não esmague em telas pequenas */
+    min-width: 900px; 
 }
 
 .styled-table thead tr {
@@ -538,12 +553,12 @@ h1 {
 }
 
 .styled-table th:nth-child(3) {
-    white-space: normal; /* Permite que o texto "Curso" e o ícone quebrem linha se necessário */
-    max-width: 150px; /* Define uma largura mínima para não ficar muito espremido */
+    white-space: normal; 
+    max-width: 150px; 
 }
 
 .styled-table th {
-    white-space: nowrap; /* Padrão: texto em uma linha */
+    white-space: nowrap; 
     padding: 12px 15px;
     vertical-align: middle;
 }
@@ -558,11 +573,11 @@ h1 {
 }
 
 .styled-table tbody tr:nth-of-type(even) {
-    background-color: var(--bg-body); /* Listrado suave */
+    background-color: var(--bg-body); 
 }
 
 .styled-table tbody tr:hover {
-    background-color: #e9f5ff; /* Destaque ao passar o mouse */
+    background-color: #e9f5ff; 
 }
 
 /* Botão de Ação na Tabela */
@@ -586,12 +601,12 @@ h1 {
 /* Estilo para cabeçalho ordenável */
 .styled-table th.sortable {
     cursor: pointer;
-    user-select: none; /* Evita selecionar o texto ao clicar rápido */
+    user-select: none; 
     transition: background-color 0.2s;
 }
 
 .styled-table th.sortable:hover {
-    background-color: var(--primary-blue-hover); /* Azul um pouco mais escuro no hover */
+    background-color: var(--primary-blue-hover);
 }
 
 /* Estilo do ícone (setinha) */
@@ -669,13 +684,13 @@ h1 {
     transition: background 0.3s;
 }
 
-.btn-call { background-color: var(--primary-blue); } /* Azul */
+.btn-call { background-color: var(--primary-blue); } 
 .btn-call:hover { background-color: var(--primary-blue-hover); }
 
-.btn-wpp { background-color: var(--success-green); } /* Verde */
+.btn-wpp { background-color: var(--success-green); } 
 .btn-wpp:hover { background-color: #1e7e34; }
 
-.btn-done { background-color: var(--text-muted); cursor: default; } /* Cinza */
+.btn-done { background-color: var(--text-muted); cursor: default; } 
 
 /* Ícones Pequenos */
 .small-actions {
@@ -731,7 +746,6 @@ h1 {
 .import-btn:hover { background-color: #59359a; }
 
 /* --- MODAL DE AÇÕES DE COBRANÇA --- */
-/* Escondido inicialmente */
 .modal-hidden {
     display: none !important;
 }
@@ -748,16 +762,16 @@ h1 {
 }
 
 #actions-modal-overlay {
-    position: fixed;              /* FIXA NA TELA */
+    position: fixed;              
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(0, 0, 0, 0.45);  /* SEMITRANSPARENTE */
-    display: flex;                /* CENTRALIZA O BOX */
+    background: rgba(0, 0, 0, 0.45); 
+    display: flex;               
     justify-content: center;
     align-items: center;
-    z-index: 99999;               /* SEMPRE POR CIMA */
+    z-index: 99999;
 }
 
 /* ANIMAÇÃO SUAVE */
@@ -854,19 +868,14 @@ h1 {
 .btn-actions-open:hover { background-color: #23272b; }
 
 /* --- CONTROLE DE ACESSO (ADMIN vs USER) --- */
-
-/* Por padrão (enquanto carrega), esconde elementos de admin para segurança visual */
 .admin-only {
     display: none !important;
 }
 
-/* Quando o JS confirma que é admin, ele adiciona a classe 'is-admin' no body */
-/* Aí mostramos os elementos novamente */
 body.is-admin .admin-only {
     display: inline-block !important; /* ou block, dependendo do elemento */
 }
 
-/* Ajuste específico para botões flexíveis (como dentro dos cards) */
 body.is-admin div.admin-only {
     display: flex !important;
 }
@@ -910,22 +919,22 @@ body.is-admin div.admin-only {
 }
 
 .extra-status {
-    display: inline-block;       /* Faz comportar como etiqueta */
-    padding: 4px 10px;           /* Espaço interno */
-    border-radius: 12px;         /* Bordas arredondadas */
-    font-size: 12px;             /* Texto menor */
-    font-weight: 700;            /* Negrito */
-    background-color: #f0f2f5;   /* Cor base neutra (será sobrescrita pelas cores específicas) */
-    color: #333;                 /* Cor do texto base */
-    text-transform: uppercase;   /* Caixa alta */
+    display: inline-block;       
+    padding: 4px 10px;           
+    border-radius: 12px;        
+    font-size: 12px;             
+    font-weight: 700;            
+    background-color: #f0f2f5;   
+    color: #333;                
+    text-transform: uppercase; 
     letter-spacing: 0.5px;
-    border: 1px solid rgba(0,0,0,0.1); /* Borda sutil */
+    border: 1px solid rgba(0,0,0,0.1); 
 }
 
 /* Link enviado */
 .status-link-enviado {
-    border-left: 6px solid #ebe700 !important; /* Força a borda */
-    background: #ebe70015 !important; /* Força o fundo */
+    border-left: 6px solid #ebe700 !important; 
+    background: #ebe70015 !important; 
 }
 
 /* Link agendado */
@@ -1064,7 +1073,7 @@ body.is-admin div.admin-only {
 /* Conteúdo (Filhos) */
 .menu-content {
     display: none; 
-    padding-left: 10px; /* Indentação */
+    padding-left: 10px; 
     margin-top: 5px;
     opacity: 0;
     transition: opacity 0.3s ease;
@@ -1099,8 +1108,8 @@ body.is-admin div.admin-only {
 }
 
 #tab-escala {
-    max-width: 98% !important; /* Sobrescreve o limite de 900px */
-    align-items: flex-start !important; /* Alinha no topo, não no centro */
+    max-width: 98% !important; 
+    align-items: flex-start !important; 
     padding: 0 10px;
 }
 /* =========================================
@@ -1118,7 +1127,6 @@ body.is-admin div.admin-only {
 
 /* --- SIDEBAR (EQUIPE) --- */
 .escala-sidebar {
-    width: 240px;
     min-width: 240px;
     background-color: #ffffff;
     border-radius: 8px;
@@ -1134,9 +1142,10 @@ body.is-admin div.admin-only {
 }
 
 .sidebar-header {
-    border-bottom: 2px solid #f0f0f0;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
+    flex-shrink: 0;      /* Não encolhe */
+    padding: 20px;
+    text-align: center;
+    border-bottom: 1px solid #f0f0f0; /* Separador opcional */
 }
 
 .sidebar-header h3 {
@@ -1173,10 +1182,10 @@ body.is-admin div.admin-only {
 /* --- ÁREA PRINCIPAL (TABELA) --- */
 .escala-main-area {
     flex: 1; 
-    min-width: 0; /* Permite encolher se necessário */
+    min-width: 0; 
     display: flex; 
     flex-direction: column;
-    overflow-x: hidden; /* Evita scroll duplo */
+    overflow-x: hidden; 
 }
 
 /* Controles */
@@ -1209,22 +1218,21 @@ body.is-admin div.admin-only {
 
 .bloco-semana {
     background: white;
-    /* Removemos bordas externas arredondadas para ficar igual à imagem */
     margin-bottom: 10px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
 
 .escala-table {
     width: 100%;
-    border-collapse: collapse; /* Bordas coladas estilo Excel */
+    border-collapse: collapse; 
     font-family: 'Segoe UI', sans-serif;
     font-size: 12px;
-    table-layout: fixed; /* Colunas fixas e iguais */
+    table-layout: fixed; 
 }
 
 /* --- CABEÇALHOS (Preto/Cinza Escuro) --- */
 .escala-table thead th {
-    background-color: #212529; /* Preto Profissional */
+    background-color: #212529; 
     color: #ffffff;
     padding: 10px 5px;
     text-align: center;
@@ -1274,10 +1282,9 @@ body.is-admin div.admin-only {
 /* --- CÉLULAS DE DADOS (CORPO DA TABELA) --- */
 
 .escala-table td {
-    /* Altura mínima para manter o padrão visual de linha única */
     min-height: 38px; 
-    height: 1px; /* Truque para que a célula cresça junto com o conteúdo */
-    vertical-align: middle; /* Centraliza verticalmente se for 1 linha */
+    height: 1px; 
+    vertical-align: middle; 
     position: relative;
 }
 
@@ -1289,7 +1296,7 @@ body.is-admin div.admin-only {
     padding-left: 10px !important;
     text-align: left;
     font-size: 11px;
-    vertical-align: middle; /* Sempre no meio */
+    vertical-align: middle; 
 }
 
 .time-cell {
@@ -1309,9 +1316,8 @@ body.is-admin div.admin-only {
 /* --- INPUT / TEXTAREA (O CAMPO DE TEXTO) --- */
 .escala-input {
     width: 100%;
-    height: 100%; /* Ocupa a célula */
-    min-height: 36px; /* Altura mínima visual */
-    
+    height: 100%; 
+    min-height: 36px; 
     border: none;
     text-align: center;
     background: transparent;
@@ -1322,11 +1328,10 @@ body.is-admin div.admin-only {
     outline: none;
     
     /* CRUCIAL PARA AUMENTAR A ALTURA: */
-    white-space: pre-wrap !important; /* Permite quebrar linha */
-    word-break: break-word;           /* Quebra palavras longas se precisar */
-    overflow: hidden;                 /* Esconde barra de rolagem */
-    resize: none;                     /* Remove alça de redimensionar */
-    
+    white-space: pre-wrap !important; 
+    word-break: break-word;           
+    overflow: hidden;                 
+    resize: none;          
     line-height: 1.3;
     padding: 10px 2px;
     box-sizing: border-box;
@@ -1361,14 +1366,14 @@ body.is-admin div.admin-only {
 /* Container de cada Semana */
 .week-wrapper {
     display: flex;
-    gap: 15px; /* Espaço entre tabela da semana e do fim de semana */
+    gap: 15px;
     margin-bottom: 25px;
     align-items: flex-start;
 }
 
 /* Tabela Principal (Seg-Sex) - Ocupa a maior parte */
 .week-main {
-    flex: 3; /* Cresce mais */
+    flex: 3;
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
@@ -1387,7 +1392,7 @@ body.is-admin div.admin-only {
 
 /* Estilo específico para FDS */
 .weekend-table th {
-    background-color: #d9534f !important; /* Vermelho/Laranja para destacar */
+    background-color: #d9534f !important; 
     color: white;
     border-color: #c9302c;
 }
@@ -1405,7 +1410,7 @@ body.is-admin div.admin-only {
 /* Ajuste Responsivo */
 @media (max-width: 1400px) {
     .week-wrapper {
-        flex-direction: column; /* Em telas menores, FDS vai para baixo */
+        flex-direction: column; 
     }
     .week-weekend {
         width: 100%;
@@ -2257,17 +2262,44 @@ body.is-admin div.admin-only {
 .kpi-pbi-card:nth-child(4) { border-top-color: var(--warning-yellow); } /* Amarelo */
 
 .kpi-label {
-    font-size: 13px;
+    font-size: 11px;
+    color: #95a5a6; /* Cinza azulado suave */
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #888;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    text-align: left;
-    justify-content: flex-start;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+}
+
+* Wrapper do Gráfico para evitar distorção e corte */
+.chart-canvas-wrapper {
+    position: relative;
+    height: 340px !important; 
+    width: 100%;
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px 10px 10px 10px; /* Espaço no topo */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+    overflow: visible !important;
+}
+
+canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Títulos dos Gráficos (se houver h3 dentro dos cards) */
+.chart-canvas-wrapper h3, 
+.chart-card h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #555;
+    margin: 0 0 15px 0;
+    padding-left: 12px;
+    border-left: 4px solid #007bff;
+    text-transform: uppercase;
+    line-height: 1.2;
 }
 
 .apexcharts-yaxis-label {
@@ -2275,9 +2307,9 @@ body.is-admin div.admin-only {
 }
 
 .kpi-value {
-    font-size: 32px;
+    font-size: 22px;
     font-weight: 800;
-    color: #212529;
+    color: #2c3e50; /* Azul escuro quase preto */
     letter-spacing: -0.5px;
 }
 
@@ -2305,7 +2337,7 @@ body.is-admin div.admin-only {
 .chart-box {
     background: #ffffff;
     border-radius: 16px;
-    padding: 25px;
+    padding: 20px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.04);
     border: 1px solid #f0f0f0;
     display: flex;
@@ -2313,26 +2345,46 @@ body.is-admin div.admin-only {
 }
 
 .chart-box h3 {
-    margin: 0 0 20px 0;
+   width: 100%;             
+    text-align: left;        
     font-size: 16px;
-    color: #495057;
     font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 15px;     
+    margin-top: 0;
     display: flex;
     align-items: center;
-    gap: 10px;
-    text-align: left !important;
-    justify-content: flex-start !important;
-    margin-bottom: 20px;
+}
+
+/* Card de KPI Moderno */
+.kpi-card-jur {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    border-left-width: 5px !important;
+    border-left-style: solid;
+    transition: all 0.2s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+}
+
+.kpi-card-jur:hover {
+    transform: translateY(-3px); /* Levanta levemente ao passar o mouse */
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
 }
 
 /* Ícones nos títulos dos gráficos */
 .chart-box h3::before {
     content: '';
-    display: inline-block;
-    width: 6px;
-    height: 18px;
-    background: var(--primary-blue); /* Accent color */
-    border-radius: 4px;
+    display: block;
+    width: 5px;              
+    height: 20px;            
+    background-color: #3498db; 
+    margin-right: 10px;      
+    border-radius: 3px;     
 }
 
 /* Tamanhos */
@@ -2356,13 +2408,14 @@ body.is-admin div.admin-only {
 
 /* Texto da Meta (Centralizado no Gauge) */
 .meta-text {
-    margin-top: -20px;
-    font-size: 16px;
-    font-weight: 700;
-    color: #333;
-    background: var(--bg-body);
-    padding: 5px 15px;
-    border-radius: 20px;
+    text-align: center;
+    background-color: #f8f9fa; 
+    padding: 10px 15px;
+    border-radius: 50px;       
+    border: 1px solid #e9ecef;
+    margin: -10px auto 0 auto; 
+    width: fit-content;        
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
 }
 
 /* --- TABELA DO DASHBOARD (ÚLTIMOS PAGAMENTOS) --- */
@@ -2631,11 +2684,9 @@ body.is-admin div.admin-only {
 /* O Container dos Cards */
 #juridico-kpi-container {
     display: grid;
-    /* Isso faz a mágica: cria colunas automáticas com largura mínima de 160px */
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
-    gap: 15px; /* Espaço entre os cards */
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 15px;
     margin-bottom: 25px;
-    width: 100%;
 }
 
 /* O Visual de Cada Card */
@@ -2672,4 +2723,238 @@ body.is-admin div.admin-only {
     font-size: 20px;
     color: #2c3e50;
     font-weight: 800;
+}
+
+.cobranca-card.status-juridica {
+    border-left: 5px solid #2c3e50 !important; /* Borda escura */
+    background-color: #f8f9fa;
+}
+
+/* Badge específica */
+.status-juridica .extra-status {
+    color: #fff;
+    background-color: #2c3e50; /* Fundo Escuro */
+    padding: 3px 8px;
+    border-radius: 12px;
+    display: inline-block;
+}
+
+/* Feriado Trabalhado (Amarelo ou Laranja forte) */
+.row-feriado-trab td {
+    background-color: #fff3e0;
+    color: #d35400;
+    font-weight: bold;
+}
+
+/* Feriado Folga (Vermelho claro, igual FDS) */
+.row-folga-feriado td {
+    background-color: #ffebee;
+    color: #c0392b;
+}
+
+/* Folga Compensatória (Verde ou Azul claro) */
+.row-folga-comp td {
+    background-color: #e8f8f5;
+    color: #16a085;
+    font-weight: bold;
+    border: 2px solid #1abc9c; /* Destaque para não esquecerem */
+}
+
+.cell-feriado {
+    background-color: #ffe0b2 !important; /* Laranja suave */
+    border: 2px solid #fb8c00;
+    color: #e65100;
+    font-weight: bold;
+}
+
+/* Se for feriado Total (Natal), pinta de vermelho */
+.cell-feriado-total {
+    background-color: #ffcdd2 !important;
+    color: #c62828;
+}
+
+#external-events {
+    padding: 10px;
+    background: #f8f9fa;
+    height: 100%;
+    overflow-y: auto;
+}
+
+/* O Cartão do Funcionário */
+.employee-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-left: 4px solid #27ae60; /* Faixa verde lateral */
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+    cursor: grab; /* Mãozinha de arrastar */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: all 0.2s ease;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.employee-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    border-color: #2ecc71;
+}
+
+.employee-card:active {
+    cursor: grabbing;
+}
+
+/* Nome Principal */
+.card-name {
+    font-weight: bold;
+    font-size: 14px;
+    color: #2c3e50;
+}
+
+/* Detalhes (Cargo/Email) */
+.card-detail {
+    font-size: 11px;
+    color: #7f8c8d;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Botão de Editar (Lápis) */
+.edit-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    color: #bdc3c7;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px;
+}
+
+.edit-btn:hover {
+    color: #3498db;
+}
+
+#tab-dash-juridico {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    width: 100% !important;
+    max-width: 98% !important;
+    align-items: flex-start !important;
+}
+
+/* Garante que o grid de KPIs se comporte bem em telas grandes */
+@media (min-width: 1400px) {
+    #juridico-kpi-container {
+        grid-template-columns: repeat(6, 1fr) !important;
+    }
+}
+
+.comp-off-badge {
+    background-color: #e74c3c;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: auto;
+    display: none;
+}
+.comp-off-badge.visible { display: inline-block; }
+
+/* Célula Bloqueada (Férias/Folga) */
+.cell-blocked {
+    background-color: #eee !important; /* Cinza */
+    color: #999 !important;
+    pointer-events: none; /* Impede clicar/editar */
+    font-weight: bold;
+    text-align: center;
+    border: 1px solid #ddd;
+    position: relative;
+}
+
+.cell-blocked::after {
+    content: "🚫"; /* Ícone visual */
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.2;
+    font-size: 20px;
+}
+
+/* Estilo específico para texto de férias */
+.cell-blocked[data-type="FÉRIAS"] {
+    background-color: #fff3e0 !important; /* Laranja clarinho */
+    color: #e67e22 !important;
+}
+
+.cell-blocked[data-type="FOLGA"] {
+    background-color: #ffebee !important; /* Vermelho clarinho */
+    color: #c62828 !important;
+}
+
+/* --- ESTILIZAÇÃO MODERNA PARA OS POPUPS (SWAL) --- */
+
+/* Container Geral do Formulário */
+.swal-modern-form {
+    text-align: left;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    padding: 0 10px;
+}
+
+/* Grupos de Inputs */
+.swal-input-group {
+    margin-bottom: 15px;
+}
+
+/* Labels (Etiquetas) */
+.swal-custom-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Inputs e Selects */
+.swal-custom-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 15px;
+    color: #333;
+    background-color: #f9f9f9;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+}
+
+.swal-custom-input:focus {
+    border-color: #3498db;
+    background-color: #fff;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    outline: none;
+}
+
+/* Destaque para Feriados (Azul) */
+.holiday-theme .swal-custom-input:focus { border-color: #9b59b6; box-shadow: 0 0 0 3px rgba(155, 89, 182, 0.1); }
+
+/* Destaque para Folga/Férias (Laranja/Vermelho) */
+.absence-theme .swal-custom-input:focus { border-color: #e67e22; box-shadow: 0 0 0 3px rgba(230, 126, 34, 0.1); }
+
+/* Texto de ajuda ou contador */
+.swal-helper-text {
+    font-size: 12px;
+    color: #e74c3c;
+    font-weight: bold;
+    margin-top: 4px;
+    display: block;
 }

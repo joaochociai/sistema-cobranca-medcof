@@ -249,47 +249,57 @@
                 </div>
             </div>
 
-            <div id="tab-dash-juridico" class="tab-content hidden">
-                <div class="dashboard-header" style="background: linear-gradient(135deg, #0d47a1, #1565c0); padding: 20px; border-radius: 10px; color: white; margin-bottom: 20px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div id="tab-dash-juridico" class="tab-content hidden" style="width: 100%; padding: 20px; box-sizing: border-box;">
+    
+                <div class="dashboard-header" style="background: linear-gradient(135deg, #0d47a1, #1565c0); padding: 20px; border-radius: 10px; color: white; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                    <div style="display:flex; justify-content:center ; align-items:center; flex-wrap:wrap; gap:15px;">
                         <div>
-                            <h2 style="margin:0; font-size:24px;">Dashboard Jurídico</h2>
-                            <p style="margin:0; opacity:0.8;">Indicadores de Performance e Recuperação</p>
+                            <h2 style="margin:0; font-size:24px; font-weight: 700;">Dashboard Jurídico</h2>
+                            <p style="margin:0; opacity:0.9; font-size: 14px;">Indicadores de Performance e Recuperação</p>
                         </div>
-                        <div style="display:flex; gap:10px; align-items:center;">
-                            <input type="date" id="dash-jur-start" class="date-filter" style="border:none;">
-                            <span style="font-weight:bold;">até</span>
-                            <input type="date" id="dash-jur-end" class="date-filter" style="border:none;">
-                            <button onclick="window.loadJuridicoDashboard()" style="background:white; color:#0d47a1; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; font-weight:bold;">Filtrar</button>
-                            <button onclick="window.openImportDashJuridico()" style="background:#ffca28; color:#333; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; font-weight:bold; margin-left:10px;">📥 Importar Dados</button>
+                        <div style="display:flex; gap:10px; align-items:center; background: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 8px;">
+                            <input type="date" id="dash-jur-start" class="date-filter" style="border:none; padding:8px; border-radius:5px; color:#333;">
+                            <span style="font-weight:bold; font-size: 13px;">até</span>
+                            <input type="date" id="dash-jur-end" class="date-filter" style="border:none; padding:8px; border-radius:5px; color:#333;">
+                            <button onclick="window.loadJuridicoDashboard()" style="background:white; color:#0d47a1; border:none; padding:8px 20px; border-radius:5px; cursor:pointer; font-weight:bold; transition: transform 0.2s;">Filtrar</button>
+                            <button onclick="window.openImportDashJuridico()" style="background:#ffca28; color:#333; border:none; padding:8px 20px; border-radius:5px; cursor:pointer; font-weight:bold; margin-left:10px;">📥 Importar</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="kpi-grid" id="juridico-kpi-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px;">
+                <div id="juridico-kpi-container" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; margin-bottom: 30px; width: 100%;">
+                </div>
+
+                <div class="charts-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; width: 100%;">
+    
+                    <div class="chart-card" style="background:white; padding:20px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,0.05); border: 1px solid #e0e0e0; min-width: 0;">
+                        <h3 style="color:#0d47a1; margin-bottom:15px; font-weight:700; font-size: 16px;">Retorno dos Disparos (Volume)</h3>
+                        <div class="chart-canvas-wrapper" style="position: relative; height: 340px; width: 100%;">
+                            <canvas id="chart-jur-funil"></canvas>
+                        </div>
                     </div>
 
-                <div class="charts-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    
-                    <div class="chart-card" style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.05);">
-                        <h3 style="color:#0d47a1; margin-bottom:15px;">Retorno dos Disparos</h3>
-                        <canvas id="chart-jur-funil"></canvas>
+                    <div class="chart-card" style="background:white; padding:20px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,0.05); border: 1px solid #e0e0e0; min-width: 0;">
+                        <h3 style="color:#0d47a1; margin-bottom:15px; font-weight:700; font-size: 16px;">Comparativo de Recuperação (Mês Anterior)</h3>
+                        <div class="chart-canvas-wrapper" style="position: relative; height: 340px; width: 100%;">
+                            <canvas id="chart-jur-recuperacao"></canvas>
+                        </div>
                     </div>
 
-                    <div class="chart-card" style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.05);">
-                        <h3 style="color:#0d47a1; margin-bottom:15px;">Comparativo de Recuperação (Mês Anterior)</h3>
-                        <canvas id="chart-jur-recuperacao"></canvas>
+                    <div class="chart-card" style="background:white; padding:20px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,0.05); border: 1px solid #e0e0e0; min-width: 0;">
+                        <h3 style="color:#0d47a1; margin-bottom:15px; font-weight:700; font-size: 16px;">Histórico de Disparos (Últimos 12 meses)</h3>
+                        <div class="chart-canvas-wrapper" style="position: relative; height: 340px; width: 100%;">
+                            <canvas id="chart-jur-historico"></canvas>
+                        </div>
                     </div>
 
-                    <div class="chart-card" style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.05);">
-                        <h3 style="color:#0d47a1; margin-bottom:15px;">Histórico de Disparos (Últimos 12 meses)</h3>
-                        <canvas id="chart-jur-historico"></canvas>
+                    <div class="chart-card" style="background:white; padding:20px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,0.05); border: 1px solid #e0e0e0; min-width: 0;">
+                        <h3 style="color:#0d47a1; margin-bottom:15px; font-weight:700; font-size: 16px;">Comparativo Anual (Disparos, Débitos, Pagos)</h3>
+                        <div class="chart-canvas-wrapper" style="position: relative; height: 340px; width: 100%;">
+                            <canvas id="chart-jur-anual"></canvas>
+                        </div>
                     </div>
 
-                    <div class="chart-card" style="background:white; padding:20px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.05);">
-                        <h3 style="color:#0d47a1; margin-bottom:15px;">Comparativo Anual (Disparos, Débitos, Pagos)</h3>
-                        <canvas id="chart-jur-anual"></canvas>
-                    </div>
                 </div>
             </div>
 
@@ -604,6 +614,7 @@
                                 <button id="next-month" onclick="window.changeEscalaMonth(1)">▶</button>
 
                                 <div class="separator"></div>
+                                <button onclick="window.openAbsenceConfigurator('FOLGA')" style="background-color: #e74c3c; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">🏖️ Dar Folga</button>
                                 <button onclick="window.openHolidayConfigurator()" style="background-color: #9b59b6; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">📅 Feriados</button>
                                 <button onclick="window.openVacationConfigurator()" style="background-color: #e67e22; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">🏖️ Marcar Férias</button>
                                 <button onclick="window.openCycleConfigurator()" style="background-color: #5dade2; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">⚙️ Configurar Ciclos</button>        
@@ -677,6 +688,13 @@
                     </div>
                     <div class="payment-panel">
                         <h3>Registrar Pagamento</h3>
+                        
+                        <div id="payment-course-selection" style="margin-bottom: 15px; background: rgba(255,255,255,0.5); padding: 10px; border-radius: 6px; border: 1px solid #ffeeba;">
+                            <p style="font-size: 12px; font-weight: bold; margin-bottom: 8px; color: #856404;">Selecione o(s) curso(s) pago(s):</p>
+                            <div id="course-checkbox-list">
+                                </div>
+                        </div>
+
                         <div class="payment-controls">
                             <input type="date" id="payment-date">
                             <select id="payment-origin">
