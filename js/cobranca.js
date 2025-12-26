@@ -10,6 +10,9 @@ import { formatDateUTC, parseDateBR, mapStatusToLabel } from './utils.js';
 export const COBRANCA_COLLECTION = 'controle_3_cobranca';
 window.COBRANCA_COLLECTION = COBRANCA_COLLECTION; 
 
+window.groupedCobrancaCache = window.groupedCobrancaCache || {};
+let currentGroupedStudent = null;
+
 // Cache local
 window.cobrancaList = [];
 let currentActionStudentId = null; 
@@ -128,6 +131,16 @@ export function filterCobranca() {
 }
 window.filterCobranca = filterCobranca;
 
+window.openActionsModalByKey = function(key) {
+    const aluno = window.groupedCobrancaCache[key];
+    if (aluno) {
+        // Certifique-se que sua openActionsModal aceite o objeto
+        openActionsModal(aluno); 
+    } else {
+        console.error("Erro: Aluno não encontrado no cache.");
+    }
+};
+
 export function renderCobrancaList(data) {
   const container = document.getElementById('cobranca-list');
   if (!container) return;
@@ -139,14 +152,12 @@ export function renderCobrancaList(data) {
     return;
   }
 
-  // --- NOVO: LÓGICA DE AGRUPAMENTO POR CPF ---
   const groupedMap = {};
 
   data.forEach(item => {
-    const key = item.CPF || item.Email || item.Nome; // Prioridade para CPF como chave única
+    const key = item.CPF || item.Email || item.Nome;
     
     if (!groupedMap[key]) {
-      // Cria o primeiro registro do aluno no mapa
       groupedMap[key] = {
         ...item,
         listaCursos: [{
@@ -155,33 +166,36 @@ export function renderCobrancaList(data) {
           valor: item.Valor,
           vencimento: item.Vencimento
         }],
-        todosIds: [item.id] // Guarda todos os IDs aleatórios do Firebase
+        todosIds: [item.id]
       };
     } else {
-      // Se o aluno já existe (duplicado por curso), adicionamos o curso à lista
-      groupedMap[key].listaCursos.push({
-        id: item.id,
-        nome: item.Curso,
-        valor: item.Valor,
-        vencimento: item.Vencimento
-      });
+      groupedMap[key].listaCursos.push({ id: item.id, nome: item.Curso, valor: item.Valor, vencimento: item.Vencimento });
       groupedMap[key].todosIds.push(item.id);
 
-      // Mantém no card principal os dados do curso mais atrasado para o cronômetro/badge
       if ((item.diasAtrasoCalculado || 0) > (groupedMap[key].diasAtrasoCalculado || 0)) {
-        groupedMap[key].diasAtrasoCalculado = item.diasAtrasoCalculado;
-        groupedMap[key].Data1Jur = item.Data1Jur;
-        groupedMap[key].DataTag = item.DataTag;
-        groupedMap[key].StatusExtra = item.StatusExtra;
+          groupedMap[key].diasAtrasoCalculado = item.diasAtrasoCalculado;
+          groupedMap[key].Data1Jur = item.Data1Jur;
+          groupedMap[key].DataTag = item.DataTag;
+          groupedMap[key].StatusExtra = item.StatusExtra;
       }
-      
-      // Soma contadores de ligações e mensagens de todos os cursos
-      groupedMap[key].LigaEtapa = (groupedMap[key].LigaEtapa || 0) + (item.LigaEtapa || 0);
-      groupedMap[key].TemplateEtapa = (groupedMap[key].TemplateEtapa || 0) + (item.TemplateEtapa || 0);
+
+      if (item.UltimaAcao) {
+          const dataItem = item.UltimaAcao.toDate ? item.UltimaAcao.toDate() : new Date(item.UltimaAcao);
+          const dataAtualMap = groupedMap[key].UltimaAcao ? 
+              (groupedMap[key].UltimaAcao.toDate ? groupedMap[key].UltimaAcao.toDate() : new Date(groupedMap[key].UltimaAcao)) : 
+              new Date(0);
+
+          if (dataItem > dataAtualMap) {
+              groupedMap[key].UltimaAcao = item.UltimaAcao;
+              groupedMap[key].UltimoResponsavel = item.UltimoResponsavel;
+          }
+      }
     }
   });
 
-  // Converte o mapa de volta para array e ordena
+  // --- O PULO DO GATO: SALVAR NO CACHE GLOBAL ---
+  window.groupedCobrancaCache = groupedMap; 
+
   const groupedArray = Object.values(groupedMap);
   const sortedData = groupedArray.sort((a, b) => {
     return (a.diasAtrasoCalculado || 0) - (b.diasAtrasoCalculado || 0);
@@ -394,25 +408,22 @@ async function salvarTagParaTodosOsCursos(alunoAgrupado, novaTag) {
 // -------------------------
 // 4. MODAL DE AÇÕES (DETALHES)
 // -------------------------
-// Variável global para armazenar os dados do grupo atual que está sendo editado
-let currentGroupedStudent = null;
 
 export function openActionsModal(alunoObjeto) {
-  // alunoObjeto agora é o objeto completo que enviamos via JSON.stringify no renderCobrancaList
+  // alunoObjeto é o objeto que vem do cache agrupado
   if (!alunoObjeto) return;
 
-  // Armazenamos o objeto completo e a lista de IDs para o salvamento em lote posterior
+  // 1. Sincronização Global
+  // Armazenamos na variável que as funções saveProposal/nextCallStage utilizam
   currentGroupedStudent = alunoObjeto;
-  window.currentActionStudentId = alunoObjeto.id; // Mantemos compatibilidade com funções antigas que usem apenas o ID principal
+  window.currentActionStudentId = alunoObjeto.id; 
 
-  // 1. Preenche Dados básicos (Campos compartilhados)
+  // 2. Preenchimento de Dados Básicos
   document.getElementById('actions-student-name').textContent = alunoObjeto.Nome;
   
-  // Calculamos o valor total somado de todos os cursos para exibição no topo
-  const totalCursos = alunoObjeto.listaCursos.length;
+  const totalCursos = alunoObjeto.listaCursos ? alunoObjeto.listaCursos.length : 0;
   
-  // Criamos o HTML para listar todos os cursos e seus respectivos valores/vencimentos
-  const cursosListaHtml = alunoObjeto.listaCursos.map(curso => `
+  const cursosListaHtml = (alunoObjeto.listaCursos || []).map(curso => `
     <div style="background: #f8f9fa; border-left: 3px solid var(--primary-blue); padding: 8px 12px; margin-bottom: 8px; border-radius: 4px;">
       <p style="margin:0; font-size: 14px;"><strong>Curso:</strong> ${curso.nome || '-'}</p>
       <p style="margin:0; font-size: 12px; color: #666;">Valor: ${curso.valor || '-'} | Vencimento: ${curso.vencimento || '-'}</p>
@@ -432,18 +443,16 @@ export function openActionsModal(alunoObjeto) {
     </div>
   `;
 
-  // 2. Preenche o Select com o Status Atual (pegando a tag mais recente/urgente do grupo)
+  // 3. Status Extra
   const tagAtual = alunoObjeto.StatusExtra?.tipo || alunoObjeto.StatusExtra || '';
   const select = document.getElementById("extra-status-select");
   if (select) select.value = tagAtual;
 
-  // 2.1 Preenche os cursos do aluno e permite alteração do valor pago!
+  // 4. Lista de Cursos para Pagamento
   const checkboxContainer = document.getElementById('course-checkbox-list');
-  if (checkboxContainer) {
+  if (checkboxContainer && alunoObjeto.listaCursos) {
       checkboxContainer.innerHTML = alunoObjeto.listaCursos.map(curso => {
-          // Limpamos o valor (R$ 1.500,00 -> 1500.00) para o input numérico
           const valorNumerico = curso.valor ? parseFloat(curso.valor.replace(/[^\d,.-]/g, '').replace('.', '').replace(',', '.')) : 0;
-
           return `
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; background: #fff; padding: 5px 10px; border-radius: 5px;">
                   <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
@@ -454,40 +463,42 @@ export function openActionsModal(alunoObjeto) {
                   </div>
                   <div style="display: flex; align-items: center; gap: 4px;">
                       <span style="font-size: 12px; font-weight: bold; color: #28a745;">R$</span>
-                      <input type="text" 
-                            class="course-payment-amount" 
-                            data-id="${curso.id}" 
-                            value="${valorNumerico.toLocaleString('pt-BR', {minimumFractionDigits: 2})}" 
-                            style="width: 90px; padding: 3px; border: 1px solid #ccc; border-radius: 4px; text-align: right; font-weight: bold; color: #28a745;">
+                      <input type="text" class="course-payment-amount" data-id="${curso.id}" 
+                             value="${valorNumerico.toLocaleString('pt-BR', {minimumFractionDigits: 2})}" 
+                             style="width: 90px; padding: 3px; border: 1px solid #ccc; border-radius: 4px; text-align: right; font-weight: bold; color: #28a745;">
                   </div>
               </div>
           `;
       }).join('');
   }
 
-  // 3. Preenche Propostas (usa as propostas do registro principal do grupo)
+  // 5. Preenche Propostas e vincula o evento de salvar
   const props = alunoObjeto.Propostas || {};
   for(let i=1; i<=4; i++) {
       const el = document.getElementById(`prop-${i}`);
-      if(el) el.value = props[`p${i}`] || '';
+      if(el) {
+          el.value = props[`p${i}`] || '';
+          // VINCULAMOS O SALVAMENTO AQUI (Garante que salve ao sair do campo)
+          el.onblur = () => window.saveProposal(i);
+      }
   }
 
-  // 4. Atualiza botões de etapa (passando o objeto agrupado)
+  // 6. Atualiza botões de etapa (CORREÇÃO: Usando o nome correto alunoObjeto)
   if (typeof updateStageButtons === 'function') {
       updateStageButtons(alunoObjeto);
   }
 
-  // 5. Atualiza a cor do cabeçalho do Modal (Visual)
+  // 7. Atualiza cor do cabeçalho
   const modalHeader = document.querySelector('.actions-header');
   if (modalHeader) {
       modalHeader.className = 'actions-header'; 
       if(tagAtual) {
-          const safe = String(tagAtual).replace(/[\s_]+/g, '-').toLowerCase();
+          const safe = String(tagAtual).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]+/g, '-').toLowerCase();
           modalHeader.classList.add(`header-status-${safe}`);
       }
   }
 
-  // 6. Exibe o Modal
+  // 8. Exibe o Modal
   const overlay = document.getElementById('actions-modal-overlay');
   if (overlay) {
     overlay.classList.remove('modal-hidden');
@@ -528,81 +539,99 @@ export function updateStageButtons(aluno) {
 window.updateStageButtons = updateStageButtons;
 
 export async function nextCallStage() {
-  if (!currentGroupedStudent) return;
-  
-  const novaEtapa = (currentGroupedStudent.LigaEtapa || 0) + 1;
-  const userEmail = getCurrentUserEmail(); 
-  const agora = new Date();
-  
-  try {
-    const batch = writeBatch(db);
-    currentGroupedStudent.todosIds.forEach(docId => {
-        batch.update(doc(db, COBRANCA_COLLECTION, docId), {
-            LigaEtapa: novaEtapa,
-            UltimaAcao: agora,
-            UltimoResponsavel: userEmail,
-            HistoricoLogs: arrayUnion({
-                tipo: 'ligacao',
-                detalhe: `Ligação #${novaEtapa} realizada (via grupo)`,
-                responsavel: userEmail,
-                timestamp: agora.toISOString()
-            })
-        });
-    });
-
-    await batch.commit();
-
-    // Atualiza o objeto em memória para o modal refletir a mudança imediatamente
-    currentGroupedStudent.LigaEtapa = novaEtapa;
-    currentGroupedStudent.UltimaAcao = agora;
-    currentGroupedStudent.UltimoResponsavel = userEmail;
+    if (!currentGroupedStudent) return;
     
-    updateStageButtons(currentGroupedStudent);
-    if(typeof loadCobrancaData === 'function') loadCobrancaData();
+    const novaEtapa = (currentGroupedStudent.LigaEtapa || 0) + 1;
+    const userEmail = getCurrentUserEmail(); 
+    const agora = new Date();
+    
+    try {
+        const batch = writeBatch(db);
+        
+        // Atualiza TODOS os cursos do aluno de uma vez no Firebase
+        currentGroupedStudent.todosIds.forEach(docId => {
+            batch.update(doc(db, COBRANCA_COLLECTION, docId), {
+                LigaEtapa: novaEtapa,
+                UltimaAcao: agora,
+                UltimoResponsavel: userEmail
+            });
+        });
 
-  } catch (err) {
-    console.error(err);
-    window.showToast("Erro ao salvar ligação.", "error");
-  }
+        await batch.commit();
+
+        // ATUALIZAÇÃO DA MEMÓRIA LOCAL (Essencial para o modo "não-tempo-real")
+        currentGroupedStudent.todosIds.forEach(id => {
+            const idx = window.cobrancaList.findIndex(a => a.id === id);
+            if (idx > -1) {
+                window.cobrancaList[idx].LigaEtapa = novaEtapa;
+                window.cobrancaList[idx].UltimaAcao = agora;
+                window.cobrancaList[idx].UltimoResponsavel = userEmail;
+            }
+        });
+
+        // Reflete a mudança no Modal imediatamente
+        updateStageButtons(currentGroupedStudent);
+        
+        // Redesenha a lista sem precisar fazer novas leituras no Firebase
+        renderCobrancaList(window.cobrancaList);
+
+    } catch (err) {
+        console.error(err);
+        window.showToast("Erro ao registrar ligação.", "error");
+    }
 }
 window.nextCallStage = nextCallStage;
 
 export async function nextTemplateStage() {
-  if (!currentGroupedStudent) return;
-  
-  const novaEtapa = (currentGroupedStudent.TemplateEtapa || 0) + 1;
-  const userEmail = getCurrentUserEmail();
-  const agora = new Date();
-  
-  try {
-    const batch = writeBatch(db);
-    currentGroupedStudent.todosIds.forEach(docId => {
-        batch.update(doc(db, COBRANCA_COLLECTION, docId), {
-            TemplateEtapa: novaEtapa,
-            UltimaAcao: agora,
-            UltimoResponsavel: userEmail,
-            HistoricoLogs: arrayUnion({
-                tipo: 'template',
-                detalhe: `Template #${novaEtapa} enviado (via grupo)`,
-                responsavel: userEmail,
-                timestamp: agora.toISOString()
-            })
-        });
-    });
-
-    await batch.commit();
-
-    currentGroupedStudent.TemplateEtapa = novaEtapa;
-    currentGroupedStudent.UltimaAcao = agora;
-    currentGroupedStudent.UltimoResponsavel = userEmail;
+    if (!currentGroupedStudent) return;
     
-    updateStageButtons(currentGroupedStudent);
-    if(typeof loadCobrancaData === 'function') loadCobrancaData();
+    const novaEtapa = (currentGroupedStudent.TemplateEtapa || 0) + 1;
+    const userEmail = getCurrentUserEmail(); 
+    const agora = new Date();
+    
+    try {
+        const batch = writeBatch(db);
+        
+        // 1. Atualiza TODOS os cursos do aluno no Firebase (Batch)
+        currentGroupedStudent.todosIds.forEach(docId => {
+            batch.update(doc(db, COBRANCA_COLLECTION, docId), {
+                TemplateEtapa: novaEtapa,
+                UltimaAcao: agora,
+                UltimoResponsavel: userEmail,
+                HistoricoLogs: arrayUnion({
+                    tipo: 'template',
+                    detalhe: `Template #${novaEtapa} enviado (via grupo)`,
+                    responsavel: userEmail,
+                    timestamp: agora.toISOString()
+                })
+            });
+        });
 
-  } catch (err) {
-    console.error(err);
-    window.showToast("Erro ao salvar template.", "error");
-  }
+        await batch.commit();
+
+        // 2. Sincroniza a MEMÓRIA LOCAL (Para a interface atualizar sem gastar leituras)
+        currentGroupedStudent.todosIds.forEach(id => {
+            const idx = window.cobrancaList.findIndex(a => a.id === id);
+            if (idx > -1) {
+                window.cobrancaList[idx].TemplateEtapa = novaEtapa;
+                window.cobrancaList[idx].UltimaAcao = agora;
+                window.cobrancaList[idx].UltimoResponsavel = userEmail;
+            }
+        });
+
+        // 3. Atualiza o objeto do Modal para refletir a data na hora
+        currentGroupedStudent.TemplateEtapa = novaEtapa;
+        currentGroupedStudent.UltimaAcao = agora;
+        currentGroupedStudent.UltimoResponsavel = userEmail;
+
+        // 4. Atualiza os botões e a lista no fundo
+        updateStageButtons(currentGroupedStudent);
+        renderCobrancaList(window.cobrancaList);
+
+    } catch (err) {
+        console.error(err);
+        window.showToast("Erro ao registrar envio de template.", "error");
+    }
 }
 window.nextTemplateStage = nextTemplateStage;
 
@@ -610,33 +639,56 @@ window.nextTemplateStage = nextTemplateStage;
 // 6. PROPOSTAS COM LOG DE QUEM DIGITOU
 // -------------------------
 window.saveProposal = async function(index) {
-  if (!currentActionStudentId) return;
-  
-  const textArea = document.getElementById(`prop-${index}`);
-  const newText = textArea ? textArea.value : '';
-  
-  const aluno = window.cobrancaList.find(a => a.id === currentActionStudentId);
-  if(!aluno.Propostas) aluno.Propostas = {};
-  
-  const oldText = aluno.Propostas[`p${index}`] || '';
-  if (newText === oldText) return;
+    if (!currentGroupedStudent) return;
+    
+    const textArea = document.getElementById(`prop-${index}`);
+    if (!textArea) return;
 
-  aluno.Propostas[`p${index}`] = newText;
-  const userEmail = getCurrentUserEmail();
+    const newText = textArea.value;
+    const userEmail = typeof getCurrentUserEmail === 'function' ? getCurrentUserEmail() : "sistema";
+    const agora = new Date();
 
-  try {
-      await updateDoc(doc(db, COBRANCA_COLLECTION, currentActionStudentId), { 
-          Propostas: aluno.Propostas,
-          HistoricoLogs: arrayUnion({
-              tipo: 'proposta',
-              detalhe: `Editou Proposta ${index}`,
-              conteudo: newText.substring(0, 50) + "...", 
-              responsavel: userEmail,
-              timestamp: new Date().toISOString()
-          })
-      });
-      console.log(`Proposta ${index} salva por ${userEmail}`);
-  } catch(e) { console.error(e); }
+    // 1. ATUALIZAÇÃO DA MEMÓRIA LOCAL (Segura)
+    if (!currentGroupedStudent.Propostas) currentGroupedStudent.Propostas = {};
+    currentGroupedStudent.Propostas[`p${index}`] = newText;
+
+    // Atualiza o cache global para o modal não "resetar" ao reabrir
+    const key = currentGroupedStudent.CPF || currentGroupedStudent.Email || currentGroupedStudent.Nome;
+    
+    // CORREÇÃO DO ERRO: Inicializa o cache se por acaso ele estiver undefined
+    if (!window.groupedCobrancaCache) window.groupedCobrancaCache = {};
+    
+    if (window.groupedCobrancaCache[key]) {
+        window.groupedCobrancaCache[key].Propostas = currentGroupedStudent.Propostas;
+        window.groupedCobrancaCache[key].UltimaAcao = agora;
+    }
+
+    try {
+        // 2. SALVAMENTO NO FIREBASE (BATCH)
+        const batch = writeBatch(db);
+        
+        // Salvamos em todos os cursos vinculados ao CPF/Grupo
+        currentGroupedStudent.todosIds.forEach(docId => {
+            const docRef = doc(db, COBRANCA_COLLECTION, docId);
+            const updateData = {};
+            updateData[`Propostas.p${index}`] = newText;
+            updateData.UltimaAcao = agora;
+            updateData.UltimoResponsavel = userEmail;
+            
+            batch.update(docRef, updateData);
+        });
+
+        await batch.commit();
+        console.log(`✅ Proposta ${index} salva para o grupo ${key}`);
+
+        // Efeito visual de sucesso no campo
+        textArea.style.backgroundColor = "#f0fff4"; 
+        setTimeout(() => { textArea.style.backgroundColor = ""; }, 1000);
+
+    } catch (e) {
+        console.error("❌ Erro ao salvar proposta:", e);
+        window.showToast("Erro ao sincronizar com o banco.", "error");
+    }
 };
 
 // -------------------------
