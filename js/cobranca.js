@@ -144,7 +144,6 @@ window.openActionsModalByKey = function(key) {
 export function renderCobrancaList(data) {
   const container = document.getElementById('cobranca-list');
   if (!container) return;
-
   container.innerHTML = '';
 
   if (!data || data.length === 0) {
@@ -153,127 +152,74 @@ export function renderCobrancaList(data) {
   }
 
   const groupedMap = {};
-
   data.forEach(item => {
     const key = item.CPF || item.Email || item.Nome;
-    
     if (!groupedMap[key]) {
       groupedMap[key] = {
         ...item,
-        listaCursos: [{
-          id: item.id,
-          nome: item.Curso,
-          valor: item.Valor,
-          vencimento: item.Vencimento
-        }],
+        listaCursos: [{ id: item.id, nome: item.Curso, valor: item.Valor, vencimento: item.Vencimento }],
         todosIds: [item.id]
       };
     } else {
       groupedMap[key].listaCursos.push({ id: item.id, nome: item.Curso, valor: item.Valor, vencimento: item.Vencimento });
       groupedMap[key].todosIds.push(item.id);
-
+      
+      // Sincroniza o maior atraso para o badge principal
       if ((item.diasAtrasoCalculado || 0) > (groupedMap[key].diasAtrasoCalculado || 0)) {
           groupedMap[key].diasAtrasoCalculado = item.diasAtrasoCalculado;
           groupedMap[key].Data1Jur = item.Data1Jur;
           groupedMap[key].DataTag = item.DataTag;
           groupedMap[key].StatusExtra = item.StatusExtra;
       }
-
-      if (item.UltimaAcao) {
-          const dataItem = item.UltimaAcao.toDate ? item.UltimaAcao.toDate() : new Date(item.UltimaAcao);
-          const dataAtualMap = groupedMap[key].UltimaAcao ? 
-              (groupedMap[key].UltimaAcao.toDate ? groupedMap[key].UltimaAcao.toDate() : new Date(groupedMap[key].UltimaAcao)) : 
-              new Date(0);
-
-          if (dataItem > dataAtualMap) {
-              groupedMap[key].UltimaAcao = item.UltimaAcao;
-              groupedMap[key].UltimoResponsavel = item.UltimoResponsavel;
-          }
-      }
     }
   });
 
-  // --- O PULO DO GATO: SALVAR NO CACHE GLOBAL ---
   window.groupedCobrancaCache = groupedMap; 
-
-  const groupedArray = Object.values(groupedMap);
-  const sortedData = groupedArray.sort((a, b) => {
-    return (a.diasAtrasoCalculado || 0) - (b.diasAtrasoCalculado || 0);
-  });
-
-  // --- FIM DA LÓGICA DE AGRUPAMENTO ---
+  const sortedData = Object.values(groupedMap).sort((a, b) => (a.diasAtrasoCalculado || 0) - (b.diasAtrasoCalculado || 0));
 
   sortedData.forEach(aluno => {
-      // Badge de dias (mantido)
-      const diasLabel = aluno.diasAtrasoCalculado 
-          ? `<span style="background:#fff3cd; color:#856404; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:bold; margin-left:5px;">${aluno.diasAtrasoCalculado} dias</span>`
-          : '';
+      const keyParaBotao = (aluno.CPF || aluno.Email || aluno.Nome).replace(/'/g, "\\'");
+      const tagNome = aluno.StatusExtra?.tipo || aluno.StatusExtra || null;
       
+      // Badge de dias (Pílula amarela)
+      const diasLabel = aluno.diasAtrasoCalculado 
+          ? `<span style="background:#fff3cd; color:#856404; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:bold; margin-left:8px; border: 1px solid #ffeeba;">${aluno.diasAtrasoCalculado} dias</span>`
+          : '';
+
       const dataLimite = aluno.Data1Jur ? (typeof formatDateUTC === 'function' ? formatDateUTC(aluno.Data1Jur) : aluno.Data1Jur) : 'N/A';
 
-      // Função auxiliar para normalizar classes CSS (remover acentos e espaços)
-      const normalizeCSSClass = (text) => {
-          return String(text || "nenhum")
-              .normalize("NFD") // Decompõe caracteres acentuados
-              .replace(/[\u0300-\u036f]/g, "") // Remove os acentos
-              .replace(/[\s_]+/g, '-') // Substitui espaços e underscores por hífens
-              .toLowerCase();
-      };
-
-      // Lógica do cronômetro (mantida exatamente como a sua)
-      const tagNome = aluno.StatusExtra?.tipo || aluno.StatusExtra || null;
-      let timeLabelHtml = '';
-      const tagsPermanentes = ['Link agendado', 'Jurídica'];
-
-      if (tagNome && aluno.DataTag && !tagsPermanentes.includes(tagNome)) {
-          const dataTag = aluno.DataTag.toDate ? aluno.DataTag.toDate() : new Date(aluno.DataTag);
-          const agora = new Date();
-          const diffDias = (agora - dataTag) / (1000 * 60 * 60 * 24);
-          const diasRestantes = 3 - diffDias;
-          let textoTempo = '';
-          if (diasRestantes < 0) textoTempo = '(expirando...)';
-          else if (diasRestantes < 1) textoTempo = `(${Math.ceil(diasRestantes * 24)}h rest.)`;
-          else textoTempo = `(${Math.ceil(diasRestantes)}d rest.)`;
-          timeLabelHtml = `<span style="font-size:0.85em; opacity:1; margin-left:6px; color:#333; font-weight:bold;">${textoTempo}</span>`;
-      }
-
-      const labelTag = typeof mapStatusToLabel === 'function' ? mapStatusToLabel(tagNome) : tagNome;
-      const statusLabelHtml = tagNome ? `<p class="extra-status">${labelTag} ${timeLabelHtml}</p>` : '';
-
-      // --- NOVO: GERADOR DA LISTA DE CURSOS PARA O CARD ---
+      // Gerador de cursos compacto (Evita amontoamento)
       const cursosHTML = aluno.listaCursos.map(c => `
-        <div style="border-left: 2px solid #eee; padding-left: 8px; margin-bottom: 4px;">
-           <span style="font-size:13px; display:block;"><strong>Curso:</strong> ${c.nome || '-'}</span>
+        <div style="border-left: 3px solid #007bff; padding-left: 10px; margin-bottom: 6px; background: #fdfdfd; padding: 5px 10px; border-radius: 4px;">
+           <span style="font-size:13px; display:block; color: #333;"><strong>Curso:</strong> ${c.nome || '-'}</span>
            <span style="font-size:12px; color:#666;">Valor: ${c.valor || '-'} | Venc: ${c.vencimento || '-'}</span>
         </div>
       `).join('');
 
       const card = document.createElement('div');
-      const safeClass = normalizeCSSClass(tagNome);
+      const safeClass = String(tagNome || "nenhum").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\s_]+/g, '-').toLowerCase();
       card.className = `cobranca-card status-${safeClass}`;
   
       card.innerHTML = `
         <div class="card-info">
-          <div style="display:flex; justify-content:space-between; align-items:start;">
-             <h3>${aluno.Nome}</h3>
+          <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom: 10px;">
+             <h3 style="margin:0; font-size: 1.1rem;">${aluno.Nome}</h3>
              ${aluno.listaCursos.length > 1 ? `<span style="background:#e7f1ff; color:#007bff; font-size:10px; padding:2px 6px; border-radius:10px; font-weight:bold;">${aluno.listaCursos.length} CURSOS</span>` : ''}
           </div>
           
-          <div style="margin: 10px 0;">
+          <div class="courses-list-container" style="margin-bottom: 12px;">
             ${cursosHTML}
           </div>
 
-          <p style="margin-top:5px; font-size:12px; color:#555;">
-              📞 Total Ligações: <strong>${aluno.LigaEtapa || 0}</strong> | 💬 Total Templates: <strong>${aluno.TemplateEtapa || 0}</strong> ${diasLabel}
+          <p style="margin:8px 0; font-size:13px; color:#444; display: flex; align-items: center;">
+              📞 Lig: <strong>${aluno.LigaEtapa || 0}</strong> | 💬 Temp: <strong>${aluno.TemplateEtapa || 0}</strong> ${diasLabel}
           </p>
-          <p class="limit-date">⚠️ Jurídico em: ${dataLimite}</p>
-          ${statusLabelHtml}
+          <p class="limit-date" style="margin: 5px 0; color: #d9534f; font-weight: 500;">⚠️ Jurídico em: ${dataLimite}</p>
+          ${tagNome ? `<p class="extra-status" style="margin-top: 8px;">${typeof mapStatusToLabel === 'function' ? mapStatusToLabel(tagNome) : tagNome}</p>` : ''}
         </div>
-        <div class="card-actions">
-          <button class="btn-actions-open" onclick='window.openActionsModal(${JSON.stringify(aluno)})'>⚡ Ações</button>
-          <div class="small-actions">
-            <button class="icon-btn trash-icon admin-only" onclick="window.archiveStudent('${aluno.id}')">🗑️</button>
-          </div>
+        <div class="card-actions" style="display: flex; flex-direction: column; gap: 10px; align-items: flex-end;">
+          <button class="btn-actions-open" onclick="window.openActionsModalByKey('${keyParaBotao}')">⚡ Ações</button>
+          <button class="icon-btn trash-icon admin-only" style="opacity: 0.3;" onclick="window.archiveStudent('${aluno.id}')">🗑️</button>
         </div>
       `;
       container.appendChild(card);
@@ -521,64 +467,59 @@ export function updateStageButtons(aluno) {
   const tempBtn = document.getElementById("btn-next-template");
   const infoTxt = document.getElementById("last-action-info");
 
-  const callStep = (aluno.LigaEtapa || 0) + 1;
-  const tempStep = (aluno.TemplateEtapa || 0) + 1;
-
-  if (callBtn) callBtn.textContent = `📞 Ligar #${callStep}`;
-  if (tempBtn) tempBtn.textContent = `💬 Template #${tempStep}`;
+  if (callBtn) callBtn.textContent = `📞 Ligar #${(aluno.LigaEtapa || 0) + 1}`;
+  if (tempBtn) tempBtn.textContent = `💬 Template #${(aluno.TemplateEtapa || 0) + 1}`;
   
-  // Exibe quem fez a última ação
   if (infoTxt && aluno.UltimaAcao) {
-      const date = aluno.UltimaAcao.toDate ? aluno.UltimaAcao.toDate() : new Date(aluno.UltimaAcao);
-      const responsavel = aluno.UltimoResponsavel || 'Sistema';
-      infoTxt.innerHTML = `Última: ${date.toLocaleString('pt-BR')}<br><small>Por: ${responsavel}</small>`;
+      let date;
+      // TRATAMENTO ROBUSTO DE DATA
+      if (aluno.UltimaAcao.toDate) date = aluno.UltimaAcao.toDate();
+      else if (aluno.UltimaAcao instanceof Date) date = aluno.UltimaAcao;
+      else if (typeof aluno.UltimaAcao === 'string') date = new Date(aluno.UltimaAcao);
+      else date = null;
+
+      if (date && !isNaN(date.getTime())) {
+          infoTxt.innerHTML = `Última: ${date.toLocaleString('pt-BR')}<br><small>Por: ${aluno.UltimoResponsavel || 'Sistema'}</small>`;
+      } else {
+          infoTxt.textContent = 'Aguardando primeira ação...';
+      }
   } else if (infoTxt) {
-      infoTxt.textContent = '';
+      infoTxt.textContent = 'Sem interações recentes';
   }
 }
 window.updateStageButtons = updateStageButtons;
 
 export async function nextCallStage() {
     if (!currentGroupedStudent) return;
-    
     const novaEtapa = (currentGroupedStudent.LigaEtapa || 0) + 1;
     const userEmail = getCurrentUserEmail(); 
     const agora = new Date();
     
     try {
         const batch = writeBatch(db);
-        
-        // Atualiza TODOS os cursos do aluno de uma vez no Firebase
         currentGroupedStudent.todosIds.forEach(docId => {
             batch.update(doc(db, COBRANCA_COLLECTION, docId), {
                 LigaEtapa: novaEtapa,
                 UltimaAcao: agora,
-                UltimoResponsavel: userEmail
+                UltimoResponsavel: userEmail,
+                HistoricoLogs: arrayUnion({
+                    tipo: 'ligacao',
+                    detalhe: `Ligação #${novaEtapa} registrada (Grupo)`,
+                    responsavel: userEmail,
+                    timestamp: agora.toISOString()
+                })
             });
         });
-
         await batch.commit();
 
-        // ATUALIZAÇÃO DA MEMÓRIA LOCAL (Essencial para o modo "não-tempo-real")
-        currentGroupedStudent.todosIds.forEach(id => {
-            const idx = window.cobrancaList.findIndex(a => a.id === id);
-            if (idx > -1) {
-                window.cobrancaList[idx].LigaEtapa = novaEtapa;
-                window.cobrancaList[idx].UltimaAcao = agora;
-                window.cobrancaList[idx].UltimoResponsavel = userEmail;
-            }
-        });
-
-        // Reflete a mudança no Modal imediatamente
-        updateStageButtons(currentGroupedStudent);
+        // ATUALIZAÇÃO LOCAL: Força a interface a mudar na hora
+        currentGroupedStudent.LigaEtapa = novaEtapa;
+        currentGroupedStudent.UltimaAcao = agora;
+        currentGroupedStudent.UltimoResponsavel = userEmail;
         
-        // Redesenha a lista sem precisar fazer novas leituras no Firebase
+        updateStageButtons(currentGroupedStudent);
         renderCobrancaList(window.cobrancaList);
-
-    } catch (err) {
-        console.error(err);
-        window.showToast("Erro ao registrar ligação.", "error");
-    }
+    } catch (err) { console.error(err); }
 }
 window.nextCallStage = nextCallStage;
 
@@ -640,55 +581,37 @@ window.nextTemplateStage = nextTemplateStage;
 // -------------------------
 window.saveProposal = async function(index) {
     if (!currentGroupedStudent) return;
-    
     const textArea = document.getElementById(`prop-${index}`);
     if (!textArea) return;
 
     const newText = textArea.value;
-    const userEmail = typeof getCurrentUserEmail === 'function' ? getCurrentUserEmail() : "sistema";
+    const userEmail = getCurrentUserEmail();
     const agora = new Date();
+    const key = currentGroupedStudent.CPF || currentGroupedStudent.Email || currentGroupedStudent.Nome;
 
-    // 1. ATUALIZAÇÃO DA MEMÓRIA LOCAL (Segura)
+    // Sincroniza Cache Local e Global IMEDIATAMENTE
     if (!currentGroupedStudent.Propostas) currentGroupedStudent.Propostas = {};
     currentGroupedStudent.Propostas[`p${index}`] = newText;
-
-    // Atualiza o cache global para o modal não "resetar" ao reabrir
-    const key = currentGroupedStudent.CPF || currentGroupedStudent.Email || currentGroupedStudent.Nome;
-    
-    // CORREÇÃO DO ERRO: Inicializa o cache se por acaso ele estiver undefined
-    if (!window.groupedCobrancaCache) window.groupedCobrancaCache = {};
     
     if (window.groupedCobrancaCache[key]) {
         window.groupedCobrancaCache[key].Propostas = currentGroupedStudent.Propostas;
-        window.groupedCobrancaCache[key].UltimaAcao = agora;
     }
 
     try {
-        // 2. SALVAMENTO NO FIREBASE (BATCH)
         const batch = writeBatch(db);
-        
-        // Salvamos em todos os cursos vinculados ao CPF/Grupo
         currentGroupedStudent.todosIds.forEach(docId => {
-            const docRef = doc(db, COBRANCA_COLLECTION, docId);
             const updateData = {};
             updateData[`Propostas.p${index}`] = newText;
             updateData.UltimaAcao = agora;
             updateData.UltimoResponsavel = userEmail;
-            
-            batch.update(docRef, updateData);
+            batch.update(doc(db, COBRANCA_COLLECTION, docId), updateData);
         });
-
         await batch.commit();
-        console.log(`✅ Proposta ${index} salva para o grupo ${key}`);
-
-        // Efeito visual de sucesso no campo
+        
+        // Efeito visual de salvamento
         textArea.style.backgroundColor = "#f0fff4"; 
-        setTimeout(() => { textArea.style.backgroundColor = ""; }, 1000);
-
-    } catch (e) {
-        console.error("❌ Erro ao salvar proposta:", e);
-        window.showToast("Erro ao sincronizar com o banco.", "error");
-    }
+        setTimeout(() => textArea.style.backgroundColor = "", 800);
+    } catch (e) { console.error("Erro ao salvar proposta:", e); }
 };
 
 // -------------------------
