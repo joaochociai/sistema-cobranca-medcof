@@ -391,7 +391,7 @@
                     </div>
                     <button class="import-btn admin-only" onclick="window.openImportModal()">📥 Imp.</button>
                     <button class="action-btn secondary admin-only" onclick="window.exportActiveCobranca()" >📤 Lig.</button>
-                    <button class="action-btn secondary" onclick="window.exportNoAnswerStudents()" >📵 Temp.</button>
+                    <button class="action-btn secondary admin-only" onclick="window.exportNoAnswerStudents()" >📵 Temp.</button>
                     <button class="action-btn admin-only" onclick="window.openPaymentsModal()" style="background-color: #198754; color: white; border-color: #198754; margin-right: 10px;">💲 Pags.</button>
                 </div>
                 <div id="cobranca-list" class="cards-container"></div>
@@ -501,6 +501,7 @@
                 </div>
 
                 <button class="import-btn admin-only" onclick="window.openImportModalJuridico()">📥 Importar</button>
+                <button onclick="window.exportJuridicoNoInteraction()" class="btn-export" style="background-color: #198754; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer;">📊 Exportar</button>
             </div>
 
             <div id="juridico-ligacoes-list" class="cards-container"></div>
@@ -616,7 +617,7 @@
                                 <div class="separator"></div>
                                 <button onclick="window.openAbsenceConfigurator('FOLGA')" style="background-color: #e74c3c; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">🏖️ Dar Folga</button>
                                 <button onclick="window.openHolidayConfigurator()" style="background-color: #9b59b6; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">📅 Feriados</button>
-                                <button onclick="window.openVacationConfigurator()" style="background-color: #e67e22; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">🏖️ Marcar Férias</button>
+                                <button onclick="window.menuFerias()" style="background-color: #e67e22; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">🏖️ Férias</button>
                                 <button onclick="window.openCycleConfigurator()" style="background-color: #5dade2; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">⚙️ Configurar Ciclos</button>        
                                 <button onclick="window.autoFillCycle()" style="background-color: #27ae60; color: white; margin-left: 10px; border:none; padding:8px 15px; border-radius:5px; cursor:pointer;">✨ Auto Ciclo (Geral)</button>
                             </div>
@@ -707,9 +708,6 @@
                             <button class="save-payment-btn" onclick="window.registerPayment()">Baixar</button>
                         </div>
                     </div>
-                    <button onclick="window.bridgeToAgenda()" class="btn-schedule" style="background-color: #8e44ad; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; display:flex; align-items:center; gap:5px;">
-                        📅 Agendar Link Futuro
-                    </button>
                 </div>
                 <div class="actions-col-proposals">
                     <h3>Propostas</h3>
