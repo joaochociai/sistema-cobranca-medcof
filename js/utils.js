@@ -73,13 +73,14 @@ export function formatDateKey(dateInput) {
 // STATUS
 // -----------------------------------------------------
 export function mapStatusToLabel(status) {
-    const labels = {
-        link_enviado: '🟡 Link enviado',
-        link_agendado: '🟣 Link agendado',
-        em_negociacao: '🟠 Em negociação',
-    };
-
-    return labels[status] || '';
+    switch (status) {
+        case 'Link enviado': return '🟡 Link enviado';
+        case 'Link agendado': return '🟣 Link Agendado';
+        case 'Em negociação': return '🟠 Em negociação';
+        // ADICIONE AQUI:
+        case 'Jurídica': return '⚖️ Jurídica'; 
+        default: return status;
+    }
 }
 
 
@@ -127,3 +128,89 @@ window.showToast = function(title, icon = 'success') {
         console.warn("SweetAlert2 não carregado. Toast:", title);
     }
 };
+
+// CONSTANTE DO CICLO (5 SEMANAS)
+export const ESCALA_CYCLE = [
+    // ÍNDICE 0: SEMANA 1
+    { 
+        label: "Semana 1 (8h | Trab. Domingo)", 
+        carga: "8h", 
+        sabado: "Folga", 
+        domingo: "08:00 - 18:00" // Horário padrão de domingo (ajustável)
+    },
+    // ÍNDICE 1: SEMANA 2
+    { 
+        label: "Semana 2 (6h | Folga FDS 1)", 
+        carga: "6h", 
+        sabado: "Folga", 
+        domingo: "Folga" 
+    },
+    // ÍNDICE 2: SEMANA 3
+    { 
+        label: "Semana 3 (8h | Folga FDS 2)", 
+        carga: "8h", 
+        sabado: "Folga", 
+        domingo: "Folga" 
+    },
+    // ÍNDICE 3: SEMANA 4
+    { 
+        label: "Semana 4 (6h | Sáb 08h-14h)", 
+        carga: "6h", 
+        sabado: "08:00 - 14:00", 
+        domingo: "Folga" 
+    },
+    // ÍNDICE 4: SEMANA 5
+    { 
+        label: "Semana 5 (6h | Sáb 12h-18h)", 
+        carga: "6h", 
+        sabado: "12:00 - 18:00", 
+        domingo: "Folga" 
+    }
+];
+
+// LÓGICA MATEMÁTICA PARA CALCULAR A SEMANA ATUAL
+export function getCycleStage(cycleStartDateStr, targetDateStr) {
+    if (!cycleStartDateStr) return null;
+
+    const start = new Date(cycleStartDateStr); // Quando o ciclo começou (Semana 1)
+    const target = new Date(targetDateStr);    // A segunda-feira que estamos montando
+    
+    // Zera horas para evitar erros de fuso horário
+    start.setHours(0,0,0,0);
+    target.setHours(0,0,0,0);
+
+    // Calcula diferença em milissegundos e converte para semanas
+    const diffTime = target - start;
+    const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
+
+    if (diffWeeks < 0) return 0; // Segurança
+
+    // O Operador % (Módulo) faz o loop infinito: 0, 1, 2, 3, 4 -> volta pro 0
+    return diffWeeks % 5;
+}
+
+// 1. DICIONÁRIO DE NOMES (Apelido na Escala -> Nome Completo no Banco)
+export const NAME_MAPPING = {
+    // Lado Esquerdo: Como aparece na coluna lateral da escala
+    // Lado Direito: Como está salvo no users (Firebase)
+    'Júlia': 'Maria Julia Araújo',
+    'Gilrêania': 'Gilreânia Paiva', 
+    'Gilreania': 'Gilreânia Paiva', // Garantindo sem acento também
+    'Mônica': 'Mônica Silva', // Se no banco for Mônica Silva
+    'Natália': 'Natália Monteiro',
+    'Lorrannye': 'Lorrannye Gaudencio',
+    'Dayse': 'Dayse Santos',
+    'Fabiana': 'Fabiana Luna',
+    'Janny': 'Janny Guimarães',
+    'Fernanda': 'Fernanda Xavier',
+    'Rozana': 'Rozana Bezerra'
+    // Adicione aqui os supervisores se eles tiverem ciclo
+    // 'Vanessa': 'Vanessa Feijó', etc...
+};
+
+// 2. FUNÇÃO PARA NORMALIZAR TEXTO (Tira acentos e põe minúsculo)
+// Ex: "João" -> "joao", "Gilrêania" -> "gilreania"
+export function normalizeText(str) {
+    if (!str) return "";
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
