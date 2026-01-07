@@ -200,7 +200,7 @@ export function renderCobrancaList(data) {
           const diffMs = new Date() - dataVerif;
           const diffHoras = diffMs / (1000 * 60 * 60);
 
-          if (diffHoras < 2) {
+          if (diffHoras < 4) {
               checkVerificadoHTML = `
                   <div class="card-verified-badge" title="Verificado recentemente">
                       <i class="fas fa-check"></i>
@@ -1221,4 +1221,5 @@ window.exportNoAnswerStudents = function() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+
 };
