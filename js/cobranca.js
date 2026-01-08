@@ -36,56 +36,21 @@ export async function loadCobrancaData() {
 
     const rawList = [];
     const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0); // Zera hora para cálculo de dias
+    hoje.setHours(0, 0, 0, 0); 
 
-    // Loop inicial para processar dados e checar Tags
     querySnapshot.forEach((docSnap) => {
+        // Apenas montamos o objeto aluno, sem a lógica de "Faxineiro"
         let aluno = { id: docSnap.id, ...docSnap.data() };
-
-        // ============================================================
-        // ⏰ "FAXINEIRO": VERIFICA SE A TAG EXPIROU (3 DIAS)
-        // ============================================================
-        // Normaliza o nome da tag para verificar
-        const tagAtual = aluno.StatusExtra?.tipo || aluno.StatusExtra;
-
-        // LISTA DE EXCEÇÕES: Tags que NUNCA expiram
-        const tagsPermanentes = ['Link agendado', 'Jurídica'];
-
-        // Só entra na verificação se tiver tag, tiver data E NÃO FOR PERMANENTE
-        if (tagAtual && aluno.DataTag && !tagsPermanentes.includes(tagAtual)) {
-            
-            const dataTag = aluno.DataTag.toDate ? aluno.DataTag.toDate() : new Date(aluno.DataTag);
-            const diffTempo = new Date() - dataTag;
-            const diasPassados = diffTempo / (1000 * 60 * 60 * 24);
-
-            if (diasPassados >= 3) {
-                console.log(`Tag expirada: ${tagAtual} para ${aluno.Nome}. Limpando...`);
-
-                aluno.StatusExtra = null;
-                aluno.DataTag = null;
-
-                const docRef = doc(db, COBRANCA_COLLECTION, aluno.id);
-                updateDoc(docRef, {
-                    StatusExtra: deleteField(),
-                    DataTag: deleteField()
-                }).catch(err => console.error("Erro ao remover tag:", err));
-            }
-        }
-        // ============================================================
-
         rawList.push(aluno);
     });
 
     // --- FILTRO: JANELA DE 31 A 45 DIAS ---
     window.cobrancaList = rawList.filter(aluno => {
-        // 1. Se já pagou, remove
         if (aluno.Status === 'Pago') return false;
 
-        // 2. Se não tem vencimento, mostra por segurança
         if (!aluno.Vencimento) return true;
 
-        // 3. Cálculo de dias de atraso
-        const dataVenc = parseDateBR(aluno.Vencimento); // Certifique-se que essa função existe
+        const dataVenc = parseDateBR(aluno.Vencimento); 
         if (!dataVenc) return true; 
         
         dataVenc.setHours(0, 0, 0, 0);
@@ -93,14 +58,12 @@ export async function loadCobrancaData() {
         const diffTime = hoje - dataVenc;
         const diasAtraso = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         
-        // Salva para exibir no card
         aluno.diasAtrasoCalculado = diasAtraso;
 
-        // REGRA: Mostrar apenas entre 31 e 45 dias (Jurídico é >= 45)
+        // REGRA: Mostrar apenas entre 31 e 45 dias
         return diasAtraso >= 31 && diasAtraso < 45;
     });
 
-    // Atualiza contador KPI
     const kpiEl = document.getElementById('total-active-count');
     if (kpiEl) kpiEl.textContent = window.cobrancaList.length;
 
@@ -200,7 +163,7 @@ export function renderCobrancaList(data) {
           const diffMs = new Date() - dataVerif;
           const diffHoras = diffMs / (1000 * 60 * 60);
 
-          if (diffHoras < 3) {
+          if (diffHoras < 4) {
               checkVerificadoHTML = `
                   <div class="card-verified-badge" title="Verificado recentemente">
                       <i class="fas fa-check"></i>
@@ -1221,6 +1184,4 @@ window.exportNoAnswerStudents = function() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-
 };
-
