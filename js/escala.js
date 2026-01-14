@@ -13,6 +13,7 @@ let currentMonth = new Date().getMonth() + 1; // 1-12
 let employeeList = []; 
 let cachedEvents = [];
 let cachedHolidays = {};
+const MEMORY_CACHE = {};
 
 // ------------------------------------------------------------------
 // 1. CONFIGURAÇÕES E MAPEAMENTOS
@@ -128,9 +129,18 @@ function renderMonthLabel() {
 
 // CARREGAMENTO: Busca registros individuais e monta o GRID em memória
 async function loadEscala() {
+    const periodKey = `${currentYear}-${currentMonth}`;
+
+    if (MEMORY_CACHE[periodKey]) {
+        console.log("⚡ Usando cache para:", periodKey);
+        cachedEvents = MEMORY_CACHE[periodKey];
+        renderAllWeeks('escala-container');
+        populateGridFromEvents();
+        checkHolidayCompOffs();
+        return;
+    }
+
     const container = document.getElementById('escala-container');
-    // Não limpa o container aqui se ele já tiver a estrutura, apenas mostra loader se necessário
-    // Mas para garantir, vamos manter o fluxo padrão:
     
     try {
         const year = currentYear;
@@ -163,6 +173,8 @@ async function loadEscala() {
             cachedEvents.push(doc.data());
         });
 
+        MEMORY_CACHE[periodKey] = cachedEvents;
+
         console.log(`Registros encontrados no banco: ${cachedEvents.length}`);
 
         // 3. Reconstrói a tabela (O Grid Vazio)
@@ -191,6 +203,19 @@ async function loadHolidaysGlobal() {
 // 2. Calcula Folgas Pendentes (Busca Inteligente no Banco)
 
 async function calculateYearlyCompOffs() {
+
+    const cacheKey = `compOffs_balance_${currentYear}`;
+    const cached = localStorage.getItem(cacheKey);
+
+    // Se houver saldo em cache de menos de 4 horas, usa ele sem consultar o banco
+    if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Date.now() - parsed.timestamp < 14400000) { 
+            updateSidebarBadges(parsed.data);
+            return;
+        }
+    }
+
     const auditData = {}; 
     const today = new Date().toISOString().split('T')[0];
     
@@ -265,7 +290,11 @@ async function calculateYearlyCompOffs() {
             }
         });
 
-        // C. Atualiza Visual
+        localStorage.setItem(cacheKey, JSON.stringify({
+        timestamp: Date.now(),
+        data: auditData
+        }));
+
         updateSidebarBadges(auditData);
 
     } catch (e) {
@@ -828,8 +857,7 @@ window.saveManualEdit = async function(textarea) {
     const newText = textarea.value;
     const names = newText.split('/').map(n => n.trim()).filter(n => n !== "");
 
-    // Essa parte é delicada: Sincronizar texto livre com banco estruturado.
-    // 1. Busca quem JÁ ESTAVA nesse dia/linha
+    // 1. Busca quem JÁ ESTAVA nesse dia/linha (Query otimizada e específica)
     const q = query(
         collection(db, ESCALA_INDIVIDUAL_COLLECTION),
         where("data", "==", dateISO),
@@ -841,18 +869,18 @@ window.saveManualEdit = async function(textarea) {
 
     const batch = writeBatch(db);
 
-    // 2. Quem remover? (Estava no banco, não está no texto)
+    // 2. Remove quem saiu do texto
     existingDocs.forEach(ex => {
         if (!names.includes(ex.nome)) {
             batch.delete(doc(db, ESCALA_INDIVIDUAL_COLLECTION, ex.id));
         }
     });
 
-    // 3. Quem adicionar? (Está no texto, não estava no banco)
+    // 3. Adiciona quem é novo no texto
     names.forEach(name => {
         const alreadyThere = existingDocs.find(ex => ex.nome === name);
         if (!alreadyThere) {
-            // Cria novo doc
+            // Usa o mesmo padrão de ID da automação para evitar duplicidade
             const docId = `${dateISO}_${normalizeText(name).replace(/\s/g, '')}`;
             batch.set(doc(db, ESCALA_INDIVIDUAL_COLLECTION, docId), {
                 data: dateISO,
@@ -864,6 +892,15 @@ window.saveManualEdit = async function(textarea) {
     });
 
     await batch.commit();
+
+    // --- IMPORTANTE: LIMPAR O CACHE DE MEMÓRIA ---
+    // Como currentMonth no loadEscala é um número, usamos parseInt(m) para bater a chave.
+    const periodKey = `${y}-${parseInt(m)}`;
+    if (typeof MEMORY_CACHE !== 'undefined') {
+        delete MEMORY_CACHE[periodKey]; 
+        console.log(`♻️ Cache limpo para ${periodKey} após edição manual.`);
+    }
+
     if(window.showToast) window.showToast("Salvo!");
 };
 
@@ -2237,6 +2274,9 @@ window.openSpecialShiftConfigurator = async function() {
         Swal.fire("Erro", "Não foi possível salvar a alteração.", "error");
     }
 };
+
+// Chame a função ao carregar a página e ao trocar de aba
+document.addEventListener('DOMContentLoaded', renderCallDutyPopup);
 
 // =========================================================
 // EXPORTAÇÕES GLOBAIS
