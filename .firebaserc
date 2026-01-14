@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "agendamento-link-912a3"
-  }
+  },
+  "targets": {
+    "agendamento-link-912a3": {
+      "hosting": {
+        "site-novo": [
+          "cobranca-medcof"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

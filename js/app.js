@@ -12,6 +12,11 @@ let currentTabId = null;
 window.currentUserRole = "normal";
 window.currentUserSectors = []; 
 
+const APP_CONFIG = {
+    version: "1.0.0", // Mude aqui para 1.0.1, 1.1.0, etc.
+    lastUpdate: "14/01/2026"
+};
+
 // ---------- Helper: Visibilidade de Setores ----------
 function applySectorVisibility(userDocData) {
   const role = (userDocData && userDocData.role) || "normal";
@@ -263,6 +268,11 @@ window.toggleMenu = toggleMenu;
 // 7. INICIALIZAÇÃO DOS CALENDÁRIOS (FLATPICKR)
 // ==============================================================
 document.addEventListener('DOMContentLoaded', () => {
+    const versionDisplay = document.getElementById('app-version');
+    if (versionDisplay) {
+        versionDisplay.innerText = `${APP_CONFIG.version} (${APP_CONFIG.lastUpdate})`;
+    }
+
     if (typeof flatpickr === 'undefined') {
         console.error("Flatpickr não carregado.");
         return;
