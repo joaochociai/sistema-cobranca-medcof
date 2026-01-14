@@ -2275,9 +2275,6 @@ window.openSpecialShiftConfigurator = async function() {
     }
 };
 
-// Chame a função ao carregar a página e ao trocar de aba
-document.addEventListener('DOMContentLoaded', renderCallDutyPopup);
-
 // =========================================================
 // EXPORTAÇÕES GLOBAIS
 // =========================================================
