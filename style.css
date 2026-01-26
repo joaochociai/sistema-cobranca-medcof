@@ -3888,3 +3888,9 @@ input:checked + .medcof-slider:before { transform: translateX(22px); }
     color: #64748b;
     border-color: #e2e8f0;
 }
+
+.btn-infobip-chat:hover {
+    background-color: #fff5f0 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(255, 80, 0, 0.2);
+}
