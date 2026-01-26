@@ -13,8 +13,8 @@ window.currentUserRole = "normal";
 window.currentUserSectors = []; 
 
 const APP_CONFIG = {
-    version: "1.0.0", // Mude aqui para 1.0.1, 1.1.0, etc.
-    lastUpdate: "14/01/2026"
+    version: "1.0.1", // Mude aqui para 1.0.1, 1.1.0, etc.
+    lastUpdate: "26/01/2026"
 };
 
 // ---------- Helper: Visibilidade de Setores ----------
@@ -133,12 +133,13 @@ onAuthStateChanged(auth, async (user) => {
         await import('./escala.js');
     }
 
-    if (isAdmin || sectors.includes("juridico")) {
-        const juridicoModule = await import('./juridico.js');
-        if (juridicoModule?.initJuridicoForm) juridicoModule.initJuridicoForm();
-        if (juridicoModule?.loadJuridicoData) juridicoModule.loadJuridicoData();
-        await import('./juridico_ligacoes.js');
-        if (window.loadJuridicoLigacoes) window.loadJuridicoLigacoes();
+    if (isAdmin || sectors.includes("juridico") || sectors.includes("cobranca")) {
+    const juridicoModule = await import('./juridico.js');
+    if (juridicoModule?.initJuridicoForm) juridicoModule.initJuridicoForm();
+    if (juridicoModule?.loadJuridicoData) juridicoModule.loadJuridicoData();
+    
+    await import('./juridico_ligacoes.js');
+    if (window.loadJuridicoLigacoes) window.loadJuridicoLigacoes();
     }
 
     if (isAdmin) {

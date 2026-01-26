@@ -211,6 +211,10 @@ export function renderCobrancaList(data) {
         </div>
         <div class="card-actions" style="display: flex; flex-direction: column; gap: 10px; align-items: flex-end;">
           <button class="btn-actions-open" onclick="window.openActionsModalByKey('${keyParaBotao}')">⚡ Ações</button>
+          <button class="btn-infobip-chat" 
+            onclick="window.abrirChatInfobip('${aluno.Telefone}')"
+            style="background: #ffffff; color: #ff5000; border: 1px solid #ff5000; padding: 5px 8px; border-radius: 6px; font-size: 11px; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: bold; transition: all 0.2s;"><img src="infobip-icon.png" alt="Infobip" style="width: 14px; height: 14px; object-fit: contain;">ABRIR CHAT
+          </button>
           <button class="icon-btn trash-icon admin-only" style="opacity: 0.3;" onclick="window.archiveStudent('${aluno.id}')">🗑️</button>
         </div>
       `;
@@ -1187,6 +1191,25 @@ window.exportNoAnswerStudents = function() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+};
+
+window.abrirChatInfobip = function(telefone) {
+    if (!telefone) return Swal.fire('Erro', 'Telefone não encontrado para este aluno.', 'error');
+
+    // Limpa o número mantendo apenas dígitos
+    let phone = telefone.toString().replace(/\D/g, "");
+
+    // Aplica a sua regra de 9º dígito para garantir a busca correta
+    if (phone.startsWith("55") && phone.length !== 13) {
+        const ddi_ddd = phone.substring(0, 4); 
+        const resto = phone.substring(4);      
+        phone = ddi_ddd + "9" + resto;         
+    }
+
+    // URL de busca no módulo Conversations da Infobip
+    const urlInfobip = `https://portal-ny2.infobip.com/conversations/search?searchTerm=${phone}`;
+    
+    window.open(urlInfobip, '_blank');
 };
 
 // INÍCIO DO BLOCO DO POPUP
